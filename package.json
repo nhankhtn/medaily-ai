@@ -1,0 +1,38 @@
+{
+  "name": "medaily-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/http/server.ts",
+    "start": "tsx src/http/server.ts",
+    "typecheck": "tsc --noEmit",
+    "db:setup": "tsx scripts/setup-checkpointer.ts",
+    "bench": "tsx scripts/bench-checkpoint.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.15.0",
+    "@langchain/core": "^1.2.11",
+    "@langchain/langgraph": "^1.4.15",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.5",
+    "hono": "^4.13.8",
+    "pg": "^8.13.1",
+    "postgres": "^3.4.9",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@types/pg": "^8.11.10",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
