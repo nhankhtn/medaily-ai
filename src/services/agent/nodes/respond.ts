@@ -1,5 +1,5 @@
-import { generateText, type Turn } from '../../gemini'
-import type { AgentStateType } from '../state'
+import { generateText, type Turn } from '../../gemini.js'
+import type { AgentStateType } from '../state.js'
 
 /**
  * Spec 35 §14, carried over: grounded strictly in the aggregates handed to it,
