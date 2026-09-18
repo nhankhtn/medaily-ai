@@ -17,6 +17,8 @@ export type ErrorReport = {
   message: string
   /** Which deploy — so a local run is never mistaken for production. */
   environment: string
+  /** The id the console lines for this request carry, and the frontend's too. */
+  requestId?: string | null
   /**
    * The conversation it belongs to. Unlike a request id this outlives the
    * request: `GET /threads/:id` reads back what the agent was answering.
@@ -54,7 +56,14 @@ export function reportText(report: ErrorReport): string {
     redact(report.message) || "an error with no message",
   ]
 
-  if (report.threadId) lines.push(`thread ${report.threadId}`)
+  // Deliberately not part of `reportKey`: keyed on the request id every
+  // failure would be a fresh incident and the rate limit would never hold
+  // anything back.
+  const marks = [
+    report.requestId ? `req ${report.requestId}` : null,
+    report.threadId ? `thread ${report.threadId}` : null,
+  ].filter(Boolean)
+  if (marks.length > 0) lines.push(marks.join("  ·  "))
 
   const stack = report.stack
     ?.split("\n")

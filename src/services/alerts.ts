@@ -1,5 +1,6 @@
 import { env } from "../config/env.js"
 import { createGate } from "../lib/alerts/gate.js"
+import { currentRequestId, log } from "../lib/log.js"
 import { reportKey, reportText, type ErrorReport } from "../lib/alerts/report.js"
 
 /**
@@ -34,13 +35,17 @@ export async function reportError(report: ErrorReport): Promise<"sent" | "skippe
   if (!alertsEnabled()) return "skipped"
   if (!gate.allow(reportKey(report), Date.now())) return "skipped"
 
+  // Filled here rather than at every call site: the id is ambient, so a caller
+  // that never thought about it still sends a message that can be traced back.
+  const traced = { ...report, requestId: report.requestId ?? currentRequestId() }
+
   try {
     const response = await fetch(`${ENDPOINT}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         chat_id: env.TELEGRAM_CHAT_ID,
-        text: reportText(report),
+        text: reportText(traced),
         disable_web_page_preview: true,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -50,8 +55,9 @@ export async function reportError(report: ErrorReport): Promise<"sent" | "skippe
       // Telegram's own reason — a wrong chat id, a bot that was never started.
       // Worth seeing once, in the console, not on the phone: alerting on this
       // would try to tell Telegram that Telegram is unreachable.
-      console.error(
-        "[alerts] telegram refused the message:",
+      log.error(
+        "alerts",
+        "telegram refused the message:",
         response.status,
         await response.text(),
       )
@@ -59,7 +65,7 @@ export async function reportError(report: ErrorReport): Promise<"sent" | "skippe
     }
     return "sent"
   } catch (error) {
-    console.error("[alerts] could not reach telegram", error)
+    log.error("alerts", "could not reach telegram", error)
     return "failed"
   }
 }

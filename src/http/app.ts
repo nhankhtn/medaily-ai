@@ -1,6 +1,8 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
+import { currentRequestId, log } from "../lib/log.js"
 import { environmentName, errorParts, reportError } from "../services/alerts.js"
+import { requestId } from "./middleware/request-id.js"
 import { chat } from "./routes/chat.js"
 import { health } from "./routes/health.js"
 import { threads } from "./routes/threads.js"
@@ -12,6 +14,8 @@ import { threads } from "./routes/threads.js"
  */
 export const app = new Hono()
 
+// First, so everything after it — cors, the routes, the error hook — has an id.
+app.use("*", requestId)
 app.use("*", cors())
 
 app.route("/health", health)
@@ -28,7 +32,7 @@ app.route("/threads", threads)
  * with it. The wait is paid only when something has already gone wrong.
  */
 app.onError(async (error, c) => {
-  console.error("[http] unhandled", error)
+  log.error("http", "unhandled", error)
 
   const { message, stack } = errorParts(error)
   await reportError({
@@ -42,5 +46,5 @@ app.onError(async (error, c) => {
 
   // No detail: what broke is now on a phone, and the caller gets nothing it
   // could act on anyway.
-  return c.json({ error: "failed" }, 500)
+  return c.json({ error: "failed", requestId: currentRequestId() }, 500)
 })

@@ -1,4 +1,5 @@
 import { env } from "../config/env.js"
+import { log } from "../lib/log.js"
 
 /**
  * The frontend's Gemini client, carried over unchanged in behaviour so both
@@ -36,8 +37,18 @@ export const DEFAULT_MODELS = [
  */
 const TIMEOUT_MS = { json: 20_000, text: 60_000 } as const
 
+type Kind = keyof typeof TIMEOUT_MS
+
+/**
+ * And a ceiling for the chain. Rotation multiplies what one question can spend
+ * — every model against every key — while the function itself is killed at
+ * `maxDuration`. The chain stops starting attempts here, with room left for the
+ * one already in flight to finish inside its own timeout.
+ */
+const BUDGET_MS = { json: 40_000, text: 120_000 } as const
+
 export function geminiEnabled(): boolean {
-  return Boolean(env.GEMINI_API_KEY)
+  return geminiKeys().length > 0
 }
 
 function parseList(value: string | undefined): string[] {
@@ -65,6 +76,24 @@ export function geminiModels(): string[] {
   return resolveModels(env.GEMINI_MODELS, env.GEMINI_MODEL)
 }
 
+/**
+ * A second key is a second allowance, not a spare: quota on this API is counted
+ * per project, so two keys from two projects answer twice as many questions
+ * before the day runs out.
+ *
+ * `GEMINI_API_KEYS` adds to `GEMINI_API_KEY` rather than replacing it — the
+ * opposite of how `GEMINI_MODELS` works, and deliberately. Replacing a model
+ * chain costs nothing; silently dropping a key that still has quota because a
+ * list was set costs capacity, and a deploy that already had one key must not
+ * lose it by gaining a second.
+ */
+export function geminiKeys(): string[] {
+  const all = [env.GEMINI_API_KEY ?? "", ...parseList(env.GEMINI_API_KEYS)]
+    .map((key) => key.trim())
+    .filter(Boolean)
+  return [...new Set(all)]
+}
+
 export type JsonSchema = Record<string, unknown>
 
 export class GeminiError extends Error {
@@ -72,19 +101,31 @@ export class GeminiError extends Error {
     message: string,
     readonly status: number | null,
     readonly model: string,
+    /** What `retry-after` said, on the refusals that carry one. */
+    readonly retryAfterMs: number | null = null,
   ) {
     super(message)
     this.name = "GeminiError"
   }
 }
 
+type Step = "key" | "model" | "stop"
+
 /**
- * Whether another model is worth trying. Quota (429) and overload (503) are per
- * model, and a 404 means this project cannot reach that id at all. Anything else
- * is about the request itself, so repeating it elsewhere only wastes time.
+ * What to change after a refusal.
+ *
+ * 429 is one quota bucket being empty, and the bucket belongs to a key — so
+ * another key still has its own, and rotating to it keeps the cheap model. 503
+ * is that model overloaded on Google's side and 404 is that model not existing
+ * for this project; neither is about the key, so the next thing to change is
+ * the model. Anything else is about the request itself, and repeating it
+ * elsewhere only spends the budget.
  */
-function worthAnotherModel(error: unknown): boolean {
-  return error instanceof GeminiError && [404, 429, 503].includes(error.status ?? 0)
+function nextStep(error: unknown): Step {
+  if (!(error instanceof GeminiError)) return "stop"
+  if (error.status === 429) return "key"
+  if (error.status === 404 || error.status === 503) return "model"
+  return "stop"
 }
 
 type InteractionResponse = {
@@ -115,35 +156,133 @@ export type GenerateTextInput = {
 export async function generateText(
   request: GenerateTextInput,
 ): Promise<{ text: string; model: string }> {
-  return attemptEachModel(async (model) => ({ text: await requestText(model, request), model }))
+  return attemptEach("text", async (model, key) => ({
+    text: await requestText(model, key, request),
+    model,
+  }))
 }
 
 export async function generateJson<T>(
   request: GenerateJsonInput,
 ): Promise<{ value: T; model: string }> {
-  return attemptEachModel(async (model) => ({
-    value: await requestJson<T>(model, request),
+  return attemptEach("json", async (model, key) => ({
+    value: await requestJson<T>(model, key, request),
     model,
   }))
 }
 
-/** Quota is per model, so one that is out of it says nothing about the next. */
-async function attemptEachModel<T>(attempt: (model: string) => Promise<T>): Promise<T> {
-  if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set")
+/**
+ * Which (key, model) pairs are out of quota, and until when.
+ *
+ * The bucket is the pair, not the key: Google counts a model's allowance per
+ * project, so the same key on a cheaper model still has one, and so does
+ * another key on this model. Cooling a whole key on one 429 would throw away
+ * quota that is still there.
+ *
+ * Per process, and therefore imperfect on a platform that runs many — like the
+ * alert gate, it is here so one question does not walk the same empty bucket
+ * twice, not to account for quota.
+ */
+const cooling = new Map<string, number>()
+const COOLDOWN_MS = 60_000
+const MAX_COOLDOWN_MS = 15 * 60_000
 
-  const models = geminiModels()
+/** A key is base64url and a model id is lowercase and dashed; neither holds a pipe. */
+function bucketOf(key: string, model: string): string {
+  return `${key}|${model}`
+}
+
+function isCooling(key: string, model: string, now: number): boolean {
+  const bucket = bucketOf(key, model)
+  const until = cooling.get(bucket)
+  if (until === undefined) return false
+  if (until > now) return true
+
+  cooling.delete(bucket)
+  return false
+}
+
+function cool(key: string, model: string, now: number, retryAfterMs: number | null): void {
+  cooling.set(bucketOf(key, model), now + (retryAfterMs ?? COOLDOWN_MS))
+}
+
+/**
+ * Where the next question starts in the key list. Round robin rather than
+ * always the first: from one starting point every question burns key one's
+ * allowance and the others sit untouched until it is empty, which is the
+ * failure this is here to avoid.
+ */
+let cursor = 0
+
+/** Rotated for this question, each key keeping its position for the log. */
+function rotatedKeys(keys: string[], start: number): { key: string; label: number }[] {
+  const numbered = keys.map((key, index) => ({ key, label: index + 1 }))
+  const offset = start % (keys.length || 1)
+  return [...numbered.slice(offset), ...numbered.slice(0, offset)]
+}
+
+/**
+ * Every model against every key, cheapest model first and the keys rotated,
+ * until one answers.
+ *
+ * Laid out as one queue rather than two loops because the pairs are tried at
+ * most once each: a pair this question already found empty is not worth a
+ * second round trip, and the pass that builds the queue is where that is said.
+ */
+async function attemptEach<T>(
+  kind: Kind,
+  attempt: (model: string, key: string) => Promise<T>,
+): Promise<T> {
+  const keys = geminiKeys()
+  if (keys.length === 0) throw new Error("no gemini key is set (GEMINI_API_KEY or GEMINI_API_KEYS)")
+
+  const started = Date.now()
+  const order = rotatedKeys(keys, cursor++)
+  const plan = geminiModels().flatMap((model) =>
+    order.map(({ key, label }) => ({ model, key, label })),
+  )
+  const ready = plan.filter(({ key, model }) => !isCooling(key, model, started))
+
+  /*
+   * Nothing ready means every bucket was cooling. Ask once anyway rather than
+   * refuse without having tried: a cooldown is a guess about when quota comes
+   * back, and someone is waiting on the other end of this.
+   */
+  const queue = ready.length > 0 ? ready : plan.slice(0, 1)
+
+  const deadline = started + BUDGET_MS[kind]
   let lastError: unknown = new Error("no gemini model configured")
+  let exhaustedModel: string | null = null
 
-  for (const [index, model] of models.entries()) {
+  for (const { model, key, label } of queue) {
+    // A model Google just called overloaded or unknown: its other keys are not
+    // going to change that, so the rest of its row is skipped.
+    if (model === exhaustedModel) continue
+    if (Date.now() >= deadline) throw lastError
+
     try {
-      return await attempt(model)
+      // The only line that says which of the two models ran, and on whose quota.
+      log.debug("gemini", `${model} on key #${label}`)
+      return await attempt(model, key)
     } catch (error) {
       lastError = error
-      const isLast = index === models.length - 1
-      if (isLast || !worthAnotherModel(error)) throw error
 
-      console.warn(
-        `[gemini] ${model} unavailable (${(error as GeminiError).status}), falling back to ${models[index + 1]}`,
+      const step = nextStep(error)
+      if (step === "stop") throw error
+      if (step === "model") {
+        exhaustedModel = model
+        log.warn(
+          "gemini",
+          `${model} unavailable (${(error as GeminiError).status}), trying the next model`,
+        )
+        continue
+      }
+
+      // Quota, and quota belongs to the key. Cool this pair and rotate.
+      cool(key, model, Date.now(), (error as GeminiError).retryAfterMs)
+      log.warn(
+        "gemini",
+        `key #${label} is out of quota on ${model}, rotating (${keys.length} keys)`,
       )
     }
   }
@@ -151,9 +290,24 @@ async function attemptEachModel<T>(attempt: (model: string) => Promise<T>): Prom
   throw lastError
 }
 
+/**
+ * When Google says how long the bucket needs, that beats a fixed guess. Seconds
+ * per RFC 9110; the HTTP-date form this API does not send is ignored, and a
+ * wild value is capped so one bad header cannot park a key for the afternoon.
+ */
+function retryAfterMs(response: Response): number | null {
+  const header = response.headers.get("retry-after")
+  if (!header) return null
+
+  const seconds = Number(header)
+  if (!Number.isFinite(seconds) || seconds <= 0) return null
+  return Math.min(seconds * 1000, MAX_COOLDOWN_MS)
+}
+
 /** The shared round trip: send, check the envelope, hand back the parsed body. */
 async function post(
   model: string,
+  key: string,
   payload: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<InteractionResponse> {
@@ -161,7 +315,7 @@ async function post(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-goog-api-key": env.GEMINI_API_KEY as string,
+      "x-goog-api-key": key,
       "Api-Revision": API_REVISION,
     },
     signal: AbortSignal.timeout(timeoutMs),
@@ -176,6 +330,7 @@ async function post(
       `gemini responded ${response.status}: ${body?.error?.message ?? "no detail"}`,
       response.status,
       model,
+      retryAfterMs(response),
     )
   }
   if (body?.status && body.status !== "completed") {
@@ -186,10 +341,12 @@ async function post(
 
 async function requestJson<T>(
   model: string,
+  key: string,
   { systemInstruction, input, schema }: GenerateJsonInput,
 ): Promise<T> {
   const body = await post(
     model,
+    key,
     {
       input,
       system_instruction: systemInstruction,
@@ -222,10 +379,12 @@ async function requestJson<T>(
  */
 async function requestText(
   model: string,
+  key: string,
   { systemInstruction, turns }: GenerateTextInput,
 ): Promise<string> {
   const body = await post(
     model,
+    key,
     {
       input: turns.map((turn) => ({
         type: turn.role === "user" ? "user_input" : "model_output",

@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { streamSSE } from "hono/streaming"
 import { z } from "zod"
 import { today } from "../../lib/dates.js"
-import { firstUserId } from "../../repositories/users.js"
+import { currentRequestId, log } from "../../lib/log.js"
 import { environmentName, errorParts, reportError } from "../../services/alerts.js"
 import { graph } from "../../services/agent/graph.js"
 import { requireToken } from "../middleware/auth.js"
@@ -18,7 +18,7 @@ const chatSchema = z.object({
 type ChatInput = z.infer<typeof chatSchema>
 
 /** Resolves the person this run is about, and the thread it belongs to. */
-async function runContext(input: ChatInput) {
+function runContext(input: ChatInput) {
   return {
     userId: input.userId,
     threadId: input.threadId ?? crypto.randomUUID(),
@@ -36,7 +36,7 @@ export const chat = new Hono()
     let threadId: string | undefined
 
     try {
-      const run = await runContext(parsed.data)
+      const run = runContext(parsed.data)
       threadId = run.threadId
 
       const result = await graph().invoke(
@@ -53,7 +53,10 @@ export const chat = new Hono()
       })
     } catch (error) {
       await reportHandled("chat", error, threadId)
-      return c.json({ error: "failed", detail: messageOf(error) }, 500)
+      return c.json(
+        { error: "failed", detail: messageOf(error), requestId: currentRequestId() },
+        500,
+      )
     }
   })
   /**
@@ -64,7 +67,7 @@ export const chat = new Hono()
     const parsed = chatSchema.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: "invalid_input", detail: parsed.error.issues }, 400)
 
-    const { userId, threadId, today: anchor } = await runContext(parsed.data)
+    const { userId, threadId, today: anchor } = runContext(parsed.data)
 
     return streamSSE(c, async (stream) => {
       await stream.writeSSE({
@@ -99,7 +102,7 @@ export const chat = new Hono()
         await reportHandled("chat/stream", error, threadId)
         await stream.writeSSE({
           event: "error",
-          data: JSON.stringify({ detail: messageOf(error) }),
+          data: JSON.stringify({ detail: messageOf(error), requestId: currentRequestId() }),
         })
       }
     })
@@ -115,7 +118,7 @@ function messageOf(error: unknown): string {
  * report themselves or nobody hears about them.
  */
 async function reportHandled(scope: string, error: unknown, threadId?: string): Promise<void> {
-  console.error(`[${scope}] run failed`, error)
+  log.error(scope, "run failed", error)
 
   const { message, stack } = errorParts(error)
   await reportError({

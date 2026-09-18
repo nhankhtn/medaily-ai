@@ -151,6 +151,78 @@ Run `corepack pnpm bench` from a deployed function — not from a laptop — to 
 what a checkpoint actually costs there. From Vietnam the number is dominated by
 the ~250ms round trip to `us-east-2` and tells you nothing about production.
 
+## Quota, and more than one key
+
+Quota on the Gemini API is counted per project and per model, so the service
+rotates through both. `GEMINI_API_KEYS` is a comma separated list; it is *added*
+to `GEMINI_API_KEY`, so a deploy that already has one key keeps it by setting
+the list rather than losing it.
+
+One question walks a queue of (model, key) pairs — cheapest model first, keys
+rotated so consecutive questions do not all start on the first one:
+
+- **429** is a bucket being empty, and the bucket belongs to a key. The pair is
+  marked cooling (for `retry-after`, when Google sends one, otherwise a minute)
+  and the next key gets the same cheap model.
+- **503** and **404** are about the model, not the key, so the rest of that
+  model's row is skipped and the next model starts.
+- Anything else is about the request itself and stops the chain immediately —
+  rotating a malformed request through five keys only burns five keys.
+
+The cooling map is per process, like the alert gate, and means what it means
+there: a floor under how often one question re-asks a bucket it already found
+empty, not an account of quota. When every pair is cooling the chain still asks
+once rather than refusing without having tried — a cooldown is a guess, and
+someone is waiting.
+
+`BUDGET_MS` caps the chain itself. Rotation multiplies what one question can
+spend, and the function is killed at `maxDuration`; the budget stops new
+attempts with room left for the one in flight to finish. `/health` reports how
+many keys are loaded — the count, never a key.
+
+## Following one request through
+
+The frontend stamps every request with `x-request-id` and logs under it; this
+service reads that header and does the same, so one id covers both halves of a
+trace. Missing, it falls back to the last segment of Vercel's own `x-vercel-id`,
+and failing that it makes one up. Whatever arrives is normalised before it
+reaches a log line — it came from outside.
+
+```
+[http]   [req 3f9a1c07] POST /chat 500 6332ms
+[gemini] [req 3f9a1c07] gemini-3.5-flash-lite on key #1
+[chat]   [req 3f9a1c07] run failed GeminiError: …
+```
+
+The id is ambient, held in an `AsyncLocalStorage` opened by
+`src/http/middleware/request-id.ts` — not a parameter. That is what lets
+`src/services/gemini.ts` name the request it is working on without taking an
+HTTP concern as an argument, which is the rule the layering is built on. It
+survives LangGraph's runner and the SSE callback; both are checked.
+
+The same id leaves by three doors: the `x-request-id` response header, the
+`requestId` field on a 500 body and on the SSE `error` event, and the `req …`
+line in the Telegram alert. It is deliberately *not* part of `reportKey` —
+keyed on it, every failure would be a fresh incident and the rate limit would
+never hold anything back.
+
+`LOG_LEVEL` sets how much of it is written:
+
+| Level | Adds |
+|-------|------|
+| `debug` | one line per model call — which model, whose key |
+| `info` | the access line per request, and the startup line. **The default** |
+| `warn` | rotations away from a key or a model, Telegram refusing a message |
+| `error` | a request that failed, a database that did not answer |
+| `silent` | nothing — to the console. Alerts still go out |
+
+An unreadable value falls back to `info`: a typo in a log setting must not be
+what takes the service down. `/health` reports the level in effect.
+
+For `/chat/stream` the access line's duration is time to the first byte, not to
+the last — the response returns when the stream opens. The lines the run writes
+carry the same id and the real timings.
+
 ## When something breaks
 
 `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` send it to a chat — the same bot and
