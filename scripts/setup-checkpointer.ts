@@ -1,6 +1,6 @@
-import '../src/config/load-env.js'
-import { setupCheckpointer } from '../src/infra/checkpointer.js'
-import { env } from '../src/config/env.js'
+import "../src/config/load-env.js"
+import { setupCheckpointer } from "../src/infra/checkpointer.js"
+import { env } from "../src/config/env.js"
 
 /**
  * Creates the checkpointer's schema and tables. Idempotent — run it once before

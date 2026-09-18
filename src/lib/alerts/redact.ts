@@ -19,22 +19,19 @@ const REPLACEMENTS: [RegExp, string][] = [
     /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|pwd|authorization|auth)(\s*[=:]\s*)("|')?[^\s"'&,;)]+/gi,
     "$1$2***",
   ],
-];
+]
 
 /**
  * A run of base64/hex long enough to be a key rather than a word. Kept to its
  * first characters: enough to tell two apart in a chat, useless to anyone who
  * reads it.
  */
-const LONG_TOKEN = /\b[A-Za-z0-9_-]{28,}\b/g;
+const LONG_TOKEN = /\b[A-Za-z0-9_-]{28,}\b/g
 
 export function redact(text: string): string {
   const named = REPLACEMENTS.reduce(
     (out, [pattern, replacement]) => out.replace(pattern, replacement),
     text,
-  );
-  return named.replace(
-    LONG_TOKEN,
-    (match) => `${match.slice(0, 4)}…[${match.length}]`,
-  );
+  )
+  return named.replace(LONG_TOKEN, (match) => `${match.slice(0, 4)}…[${match.length}]`)
 }

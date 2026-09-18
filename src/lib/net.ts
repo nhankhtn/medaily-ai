@@ -1,4 +1,4 @@
-import net from 'node:net'
+import net from "node:net"
 
 /**
  * Neon resolves to both A and AAAA records, and a network without working IPv6

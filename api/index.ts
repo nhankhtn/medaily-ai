@@ -1,5 +1,5 @@
-import { handle } from '@hono/node-server/vercel'
-import { app } from '../src/http/app.js'
+import { handle } from "@hono/node-server/vercel"
+import { app } from "../src/http/app.js"
 
 /**
  * The Vercel entry point. `vercel.json` rewrites every path here, so the Hono
@@ -12,6 +12,6 @@ import { app } from '../src/http/app.js'
  * never writes to `res` — every request then hangs until the function times
  * out. This adapter is the Node request listener Vercel actually calls.
  */
-export const config = { runtime: 'nodejs' }
+export const config = { runtime: "nodejs" }
 
 export default handle(app)

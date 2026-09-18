@@ -1,7 +1,7 @@
-import { sql } from '../infra/db.js'
-import type { ISODate } from '../lib/dates.js'
+import { sql } from "../infra/db.js"
+import type { ISODate } from "../lib/dates.js"
 
-export type GoalStatus = 'active' | 'completed' | 'paused' | 'cancelled'
+export type GoalStatus = "active" | "completed" | "paused" | "cancelled"
 
 export type GoalFilter = {
   userId: string

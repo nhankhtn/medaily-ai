@@ -1,14 +1,14 @@
-import { Annotation } from '@langchain/langgraph'
-import type { Turn } from '../gemini.js'
-import type { ISODate } from '../../lib/dates.js'
+import { Annotation } from "@langchain/langgraph"
+import type { Turn } from "../gemini.js"
+import type { ISODate } from "../../lib/dates.js"
 
 /**
  * What the router decided, kept in state rather than hidden inside a node.
  * A decision you can read back is the point of the graph: when the agent
  * answers the wrong question, the reason it chose that route is on the run.
  */
-export type Intent = 'review' | 'plan' | 'finance' | 'daily' | 'smalltalk'
-export type Period = 'week' | 'month' | 'recent'
+export type Intent = "review" | "plan" | "finance" | "daily" | "smalltalk"
+export type Period = "week" | "month" | "recent"
 
 export type Decision = {
   intent: Intent
@@ -29,15 +29,15 @@ export const AgentState = Annotation.Root({
   }),
   input: Annotation<string>({
     reducer: (_previous, next) => next,
-    default: () => '',
+    default: () => "",
   }),
   userId: Annotation<string>({
     reducer: (_previous, next) => next,
-    default: () => '',
+    default: () => "",
   }),
   today: Annotation<ISODate>({
     reducer: (_previous, next) => next,
-    default: () => '',
+    default: () => "",
   }),
   decision: Annotation<Decision | null>({
     reducer: (_previous, next) => next,
@@ -49,7 +49,7 @@ export const AgentState = Annotation.Root({
   }),
   answer: Annotation<string>({
     reducer: (_previous, next) => next,
-    default: () => '',
+    default: () => "",
   }),
   /** Which model answered each step, so a slow or degraded chain is visible. */
   models: Annotation<string[]>({

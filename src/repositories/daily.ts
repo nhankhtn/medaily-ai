@@ -1,5 +1,5 @@
-import { sql } from '../infra/db.js'
-import type { ISODate } from '../lib/dates.js'
+import { sql } from "../infra/db.js"
+import type { ISODate } from "../lib/dates.js"
 
 /**
  * Daily logs. Read-only — this service never writes to the app's tables.

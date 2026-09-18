@@ -1,6 +1,6 @@
-import '../lib/net.js'
-import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
-import { env } from '../config/env.js'
+import "../lib/net.js"
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres"
+import { env } from "../config/env.js"
 
 /**
  * Thread memory lives in the same Neon database the app already uses, in its
@@ -10,7 +10,7 @@ import { env } from '../config/env.js'
  * One saver per process: it holds a `pg.Pool`, and a new pool per request would
  * exhaust Neon's connection budget long before the traffic justified it.
  */
-const SCHEMA = 'agent'
+const SCHEMA = "agent"
 
 let saver: PostgresSaver | undefined
 

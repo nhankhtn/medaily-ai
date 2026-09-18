@@ -1,7 +1,7 @@
-import '../config/load-env.js'
-import { serve } from '@hono/node-server'
-import { app } from './app.js'
-import { env } from '../config/env.js'
+import "../config/load-env.js"
+import { serve } from "@hono/node-server"
+import { app } from "./app.js"
+import { env } from "../config/env.js"
 
 /**
  * The local server. Vercel does not use this file — it runs `api/index.ts`

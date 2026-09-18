@@ -1,11 +1,11 @@
 /** A calendar date as YYYY-MM-DD. The app's dates are dates, never instants. */
 export type ISODate = string
 
-const TZ = 'Asia/Ho_Chi_Minh'
+const TZ = "Asia/Ho_Chi_Minh"
 
 export function today(timezone = TZ): ISODate {
   // `en-CA` formats as YYYY-MM-DD, which saves reassembling the parts by hand.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date())
 }
 
 export function addDays(date: ISODate, days: number): ISODate {
@@ -35,12 +35,12 @@ export function endOfMonth(date: ISODate): ISODate {
 export type Range = { start: ISODate; end: ISODate }
 
 /** The window a routed period refers to, resolved against today. */
-export function rangeOf(period: 'week' | 'month' | 'recent', anchor: ISODate): Range {
-  if (period === 'week') {
+export function rangeOf(period: "week" | "month" | "recent", anchor: ISODate): Range {
+  if (period === "week") {
     const start = startOfWeek(anchor)
     return { start, end: addDays(start, 6) }
   }
-  if (period === 'month') {
+  if (period === "month") {
     return { start: startOfMonth(anchor), end: endOfMonth(anchor) }
   }
   return { start: addDays(anchor, -13), end: anchor }

@@ -1,4 +1,4 @@
-import { env } from '../config/env.js'
+import { env } from "../config/env.js"
 
 /**
  * The frontend's Gemini client, carried over unchanged in behaviour so both
@@ -8,14 +8,14 @@ import { env } from '../config/env.js'
  * Mirrors `medaily-frontend/src/server/services/gemini.ts`. When that file
  * changes — a new API revision, a different model chain — this one follows.
  */
-const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/interactions'
+const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions"
 
 /**
  * Pinned deliberately. The May 2026 revision replaced the `outputs` array with
  * `steps` and folded `response_mime_type` into `response_format`; unpinned, the
  * next such change reshapes the response under a deployed build.
  */
-const API_REVISION = '2026-05-20'
+const API_REVISION = "2026-05-20"
 
 /**
  * Tried in order, first one that answers wins. Quota on this API is counted per
@@ -23,10 +23,10 @@ const API_REVISION = '2026-05-20'
  * others. Cheapest first, then a step up.
  */
 export const DEFAULT_MODELS = [
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-  'gemini-3.5-flash',
-  'gemini-3.7-flash',
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.7-flash",
 ] as const
 
 /**
@@ -41,8 +41,8 @@ export function geminiEnabled(): boolean {
 }
 
 function parseList(value: string | undefined): string[] {
-  return (value ?? '')
-    .split(',')
+  return (value ?? "")
+    .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
 }
@@ -74,7 +74,7 @@ export class GeminiError extends Error {
     readonly model: string,
   ) {
     super(message)
-    this.name = 'GeminiError'
+    this.name = "GeminiError"
   }
 }
 
@@ -104,7 +104,7 @@ export type GenerateJsonInput = {
  * interaction is kept open on Google's side, so the transcript is rebuilt from
  * what the checkpointer stored rather than resumed by id.
  */
-export type Turn = { role: 'user' | 'model'; text: string }
+export type Turn = { role: "user" | "model"; text: string }
 
 export type GenerateTextInput = {
   systemInstruction: string
@@ -129,10 +129,10 @@ export async function generateJson<T>(
 
 /** Quota is per model, so one that is out of it says nothing about the next. */
 async function attemptEachModel<T>(attempt: (model: string) => Promise<T>): Promise<T> {
-  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set')
+  if (!env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set")
 
   const models = geminiModels()
-  let lastError: unknown = new Error('no gemini model configured')
+  let lastError: unknown = new Error("no gemini model configured")
 
   for (const [index, model] of models.entries()) {
     try {
@@ -158,11 +158,11 @@ async function post(
   timeoutMs: number,
 ): Promise<InteractionResponse> {
   const response = await fetch(ENDPOINT, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': env.GEMINI_API_KEY as string,
-      'Api-Revision': API_REVISION,
+      "Content-Type": "application/json",
+      "x-goog-api-key": env.GEMINI_API_KEY as string,
+      "Api-Revision": API_REVISION,
     },
     signal: AbortSignal.timeout(timeoutMs),
     // Nothing is kept on Google's side beyond answering this one request.
@@ -173,12 +173,12 @@ async function post(
 
   if (!response.ok) {
     throw new GeminiError(
-      `gemini responded ${response.status}: ${body?.error?.message ?? 'no detail'}`,
+      `gemini responded ${response.status}: ${body?.error?.message ?? "no detail"}`,
       response.status,
       model,
     )
   }
-  if (body?.status && body.status !== 'completed') {
+  if (body?.status && body.status !== "completed") {
     throw new GeminiError(`gemini did not complete: ${body.status}`, null, model)
   }
   return body ?? {}
@@ -194,10 +194,10 @@ async function requestJson<T>(
       input,
       system_instruction: systemInstruction,
       // A decision, not authorship: no sampling spread and no long deliberation.
-      generation_config: { temperature: 0, thinking_level: 'low' },
+      generation_config: { temperature: 0, thinking_level: "low" },
       response_format: {
-        type: 'text',
-        mime_type: 'application/json',
+        type: "text",
+        mime_type: "application/json",
         ...(schema ? { schema } : {}),
       },
     },
@@ -205,12 +205,12 @@ async function requestJson<T>(
   )
 
   const text = outputTextOf(body)
-  if (!text) throw new GeminiError('gemini returned no text', null, model)
+  if (!text) throw new GeminiError("gemini returned no text", null, model)
 
   try {
     return JSON.parse(text) as T
   } catch {
-    throw new GeminiError('gemini returned text that is not JSON', null, model)
+    throw new GeminiError("gemini returned text that is not JSON", null, model)
   }
 }
 
@@ -228,19 +228,19 @@ async function requestText(
     model,
     {
       input: turns.map((turn) => ({
-        type: turn.role === 'user' ? 'user_input' : 'model_output',
-        content: [{ type: 'text', text: turn.text }],
+        type: turn.role === "user" ? "user_input" : "model_output",
+        content: [{ type: "text", text: turn.text }],
       })),
       system_instruction: systemInstruction,
       // Prose over numbers, not extraction: it needs room to weigh them, and a
       // little spread stops every week reading like the same paragraph.
-      generation_config: { temperature: 0.3, thinking_level: 'medium' },
+      generation_config: { temperature: 0.3, thinking_level: "medium" },
     },
     TIMEOUT_MS.text,
   )
 
   const text = outputTextOf(body)
-  if (!text) throw new GeminiError('gemini returned no text', null, model)
+  if (!text) throw new GeminiError("gemini returned no text", null, model)
   return text
 }
 
@@ -249,13 +249,13 @@ async function requestText(
  * reasoning and tool traffic, which must not reach the parser.
  */
 function outputTextOf(body: InteractionResponse | null): string {
-  const outputs = (body?.steps ?? []).filter((step) => step.type === 'model_output')
+  const outputs = (body?.steps ?? []).filter((step) => step.type === "model_output")
   const last = outputs.at(-1)
-  if (!last) return ''
+  if (!last) return ""
 
   return (last.content ?? [])
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .filter((block) => block.type === "text" && typeof block.text === "string")
     .map((block) => block.text)
-    .join('')
+    .join("")
     .trim()
 }

@@ -1,19 +1,19 @@
-import { Hono } from 'hono'
-import { checkpointer } from '../../infra/checkpointer.js'
-import { graph } from '../../services/agent/graph.js'
-import { requireToken } from '../middleware/auth.js'
+import { Hono } from "hono"
+import { checkpointer } from "../../infra/checkpointer.js"
+import { graph } from "../../services/agent/graph.js"
+import { requireToken } from "../middleware/auth.js"
 
 /**
  * Reading a thread back out of the checkpointer is the proof that memory stuck:
  * a fresh process, no browser state, and the conversation is still there.
  */
 export const threads = new Hono()
-  .use('*', requireToken)
-  .get('/:id', async (c) => {
-    const threadId = c.req.param('id')
+  .use("*", requireToken)
+  .get("/:id", async (c) => {
+    const threadId = c.req.param("id")
     const snapshot = await graph().getState({ configurable: { thread_id: threadId } })
 
-    if (!snapshot.createdAt) return c.json({ error: 'not_found' }, 404)
+    if (!snapshot.createdAt) return c.json({ error: "not_found" }, 404)
 
     return c.json({
       threadId,
@@ -22,7 +22,7 @@ export const threads = new Hono()
       decision: snapshot.values.decision ?? null,
     })
   })
-  .delete('/:id', async (c) => {
-    await checkpointer().deleteThread(c.req.param('id'))
+  .delete("/:id", async (c) => {
+    await checkpointer().deleteThread(c.req.param("id"))
     return c.json({ ok: true })
   })

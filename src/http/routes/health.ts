@@ -1,8 +1,8 @@
-import { Hono } from "hono";
-import { env } from "../../config/env.js";
-import { dbConfigured, sql } from "../../infra/db.js";
-import { alertsEnabled } from "../../services/alerts.js";
-import { geminiEnabled, geminiModels } from "../../services/gemini.js";
+import { Hono } from "hono"
+import { env } from "../../config/env.js"
+import { dbConfigured, sql } from "../../infra/db.js"
+import { alertsEnabled } from "../../services/alerts.js"
+import { geminiEnabled, geminiModels } from "../../services/gemini.js"
 
 /**
  * Says what is configured and whether the database answers. No token: this is
@@ -15,22 +15,22 @@ export const health = new Hono().get("/", async (c) => {
     models: geminiModels(),
     token: env.SERVICE_TOKEN ? "configured" : "not_configured",
     alerts: alertsEnabled() ? "configured" : "not_configured",
-  };
+  }
 
   if (dbConfigured()) {
-    const startedAt = Date.now();
+    const startedAt = Date.now()
     try {
-      await sql`select 1`;
-      checks.database = "ok";
+      await sql`select 1`
+      checks.database = "ok"
       // Worth reporting on every call: this is the number that decides whether
       // the service is sitting near its database or across an ocean from it.
-      checks.databaseLatencyMs = Date.now() - startedAt;
+      checks.databaseLatencyMs = Date.now() - startedAt
     } catch (error) {
-      checks.database = "unreachable";
-      console.error("[health] database unreachable", error);
+      checks.database = "unreachable"
+      console.error("[health] database unreachable", error)
     }
   }
 
-  const healthy = checks.database === "ok" && geminiEnabled();
-  return c.json({ ok: healthy, ...checks }, healthy ? 200 : 503);
-});
+  const healthy = checks.database === "ok" && geminiEnabled()
+  return c.json({ ok: healthy, ...checks }, healthy ? 200 : 503)
+})

@@ -1,9 +1,9 @@
-import { END, START, StateGraph } from '@langchain/langgraph'
-import { checkpointer } from '../../infra/checkpointer.js'
-import { load } from './nodes/load.js'
-import { respond } from './nodes/respond.js'
-import { route } from './nodes/route.js'
-import { AgentState } from './state.js'
+import { END, START, StateGraph } from "@langchain/langgraph"
+import { checkpointer } from "../../infra/checkpointer.js"
+import { load } from "./nodes/load.js"
+import { respond } from "./nodes/respond.js"
+import { route } from "./nodes/route.js"
+import { AgentState } from "./state.js"
 
 /**
  *   route ──┬── load ── respond ── END
@@ -20,17 +20,17 @@ let compiled: ReturnType<typeof build> | undefined
 
 function build() {
   return new StateGraph(AgentState)
-    .addNode('route', route)
-    .addNode('load', load)
-    .addNode('respond', respond)
-    .addEdge(START, 'route')
+    .addNode("route", route)
+    .addNode("load", load)
+    .addNode("respond", respond)
+    .addEdge(START, "route")
     .addConditionalEdges(
-      'route',
-      (state) => (state.decision?.intent === 'smalltalk' ? 'respond' : 'load'),
-      ['load', 'respond'],
+      "route",
+      (state) => (state.decision?.intent === "smalltalk" ? "respond" : "load"),
+      ["load", "respond"],
     )
-    .addEdge('load', 'respond')
-    .addEdge('respond', END)
+    .addEdge("load", "respond")
+    .addEdge("respond", END)
     .compile({ checkpointer: checkpointer() })
 }
 

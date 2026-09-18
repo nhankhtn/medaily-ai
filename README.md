@@ -82,6 +82,28 @@ curl -sX POST localhost:3001/chat \
 curl -s -H "authorization: Bearer $TOKEN" localhost:3001/threads/<id>
 ```
 
+## Style and lint
+
+```bash
+corepack pnpm check        # tsc --noEmit, then eslint, then prettier --check
+corepack pnpm lint:fix     # what eslint can fix on its own
+corepack pnpm format       # prettier, in place
+```
+
+Prettier owns formatting — no semicolons, single quotes, 100 columns, which is
+what most of the codebase already was. ESLint owns correctness only:
+`eslint-config-prettier` switches off every rule the two could disagree about.
+
+The lint is **type-aware** (`recommendedTypeChecked`), so it needs a TypeScript
+program and is slower than a plain lint. That is the point: most of what can go
+wrong in this service is a promise nobody waited for — a checkpoint write, a
+Telegram report — and a linter without types cannot see one.
+
+In VS Code, `.vscode/settings.json` formats on save and applies ESLint's fixes;
+`.vscode/extensions.json` names the two extensions that do it. It also sets
+`importModuleSpecifierEnding: "js"`, so auto-import writes the `.js` that Node's
+ESM loader needs instead of leaving it for the build to catch.
+
 `POST /chat/stream` runs the same thing as SSE, one event per node with the
 elapsed time — useful for finding which node spent the nine seconds.
 
@@ -94,8 +116,8 @@ one, and esbuild — which both `tsx` and Vercel use — strips types without
 checking them. Without this, a type error deploys quietly and fails at runtime.
 
 Having a `build` script costs one thing: Vercel then insists on an output
-directory afterwards and fails the deploy with *No Output Directory named
-"public" found* when there is none. So `public/` is committed empty, and
+directory afterwards and fails the deploy with _No Output Directory named
+"public" found_ when there is none. So `public/` is committed empty, and
 `vercel.json` names it in `outputDirectory`. Nothing is ever written there —
 `api/index.ts` is the whole deploy. Delete the directory and the build breaks
 again; drop the `build` script instead if the typecheck is ever not wanted.

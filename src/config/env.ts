@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from "zod"
 
 /**
  * Read once, at import. A missing DATABASE_URL or GEMINI_API_KEY is not fatal
@@ -6,7 +6,7 @@ import { z } from 'zod'
  * setup than a process that refuses to boot.
  */
 const schema = z.object({
-  DATABASE_URL: z.string().default(''),
+  DATABASE_URL: z.string().default(""),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_MODELS: z.string().optional(),
@@ -18,8 +18,8 @@ const schema = z.object({
   TELEGRAM_CHAT_ID: z.string().optional(),
 
   PORT: z.coerce.number().default(3001),
-  NODE_ENV: z.string().default('development'),
+  NODE_ENV: z.string().default("development"),
 })
 
 export const env = schema.parse(process.env)
-export const isProduction = env.NODE_ENV === 'production'
+export const isProduction = env.NODE_ENV === "production"

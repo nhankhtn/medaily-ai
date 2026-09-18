@@ -1,9 +1,9 @@
-import '../src/config/load-env.js'
-import { Annotation, END, MemorySaver, START, StateGraph } from '@langchain/langgraph'
-import type { BaseCheckpointSaver } from '@langchain/langgraph'
-import { checkpointer, setupCheckpointer } from '../src/infra/checkpointer.js'
-import { env } from '../src/config/env.js'
-import { sql } from '../src/infra/db.js'
+import "../src/config/load-env.js"
+import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/langgraph"
+import type { BaseCheckpointSaver } from "@langchain/langgraph"
+import { checkpointer, setupCheckpointer } from "../src/infra/checkpointer.js"
+import { env } from "../src/config/env.js"
+import { sql } from "../src/infra/db.js"
 
 /**
  * The one number that decides whether the graph belongs on Vercel: what a
@@ -24,13 +24,13 @@ const State = Annotation.Root({
 function build(saver: BaseCheckpointSaver) {
   const step = (state: typeof State.State) => ({ n: state.n + 1 })
   return new StateGraph(State)
-    .addNode('a', step)
-    .addNode('b', step)
-    .addNode('c', step)
-    .addEdge(START, 'a')
-    .addEdge('a', 'b')
-    .addEdge('b', 'c')
-    .addEdge('c', END)
+    .addNode("a", step)
+    .addNode("b", step)
+    .addNode("c", step)
+    .addEdge(START, "a")
+    .addEdge("a", "b")
+    .addEdge("b", "c")
+    .addEdge("c", END)
     .compile({ checkpointer: saver })
 }
 
@@ -67,11 +67,11 @@ console.log(`Round trip to Postgres:  ${(performance.now() - pingStart).toFixed(
 await setupCheckpointer()
 
 // A warm-up run each: the first invoke pays for pool setup and statement prep.
-await build(new MemorySaver()).invoke({ n: 0 }, { configurable: { thread_id: 'warmup-mem' } })
-await build(checkpointer()).invoke({ n: 0 }, { configurable: { thread_id: 'warmup-pg' } })
+await build(new MemorySaver()).invoke({ n: 0 }, { configurable: { thread_id: "warmup-mem" } })
+await build(checkpointer()).invoke({ n: 0 }, { configurable: { thread_id: "warmup-pg" } })
 
-const memory = report('MemorySaver', await time('mem', new MemorySaver()))
-const postgres = report('PostgresSaver (Neon)', await time('pg', checkpointer()))
+const memory = report("MemorySaver", await time("mem", new MemorySaver()))
+const postgres = report("PostgresSaver (Neon)", await time("pg", checkpointer()))
 
 const overhead = postgres - memory
 console.log(
@@ -79,8 +79,8 @@ console.log(
 )
 console.log(
   overhead / NODES > 150
-    ? 'That is high — the function is far from the database. Move it closer before building on this.'
-    : 'Workable. Co-locating the Vercel function with Neon keeps it there.',
+    ? "That is high — the function is far from the database. Move it closer before building on this."
+    : "Workable. Co-locating the Vercel function with Neon keeps it there.",
 )
 
 process.exit(0)

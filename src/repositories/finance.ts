@@ -1,7 +1,7 @@
-import { sql } from '../infra/db.js'
-import type { ISODate } from '../lib/dates.js'
+import { sql } from "../infra/db.js"
+import type { ISODate } from "../lib/dates.js"
 
-export type TransactionKind = 'income' | 'expense' | 'transfer'
+export type TransactionKind = "income" | "expense" | "transfer"
 
 export type SpendFilter = {
   userId: string

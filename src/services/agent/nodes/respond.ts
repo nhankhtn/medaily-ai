@@ -1,5 +1,5 @@
-import { generateText, type Turn } from '../../gemini.js'
-import type { AgentStateType } from '../state.js'
+import { generateText, type Turn } from "../../gemini.js"
+import type { AgentStateType } from "../state.js"
 
 /**
  * Spec 35 §14, carried over: grounded strictly in the aggregates handed to it,
@@ -38,9 +38,9 @@ const REPLAYED_TURNS = 12
 export async function respond(state: AgentStateType): Promise<Partial<AgentStateType>> {
   const context = state.context
     ? `\n\nTheir numbers for this question:\n${JSON.stringify(state.context, null, 2)}`
-    : ''
+    : ""
 
-  const reason = state.decision?.reason ? `\n\n(You read this as: ${state.decision.reason})` : ''
+  const reason = state.decision?.reason ? `\n\n(You read this as: ${state.decision.reason})` : ""
 
   /*
    * Prior turns are sent again rather than resumed: `store: false` means Google
@@ -49,7 +49,7 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
    */
   const turns: Turn[] = [
     ...state.messages.slice(-REPLAYED_TURNS),
-    { role: 'user', text: `${state.input}${reason}${context}` },
+    { role: "user", text: `${state.input}${reason}${context}` },
   ]
 
   const { text, model } = await generateText({ systemInstruction: SYSTEM_PROMPT, turns })
@@ -59,8 +59,8 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
     // Only the plain message and answer are remembered. Re-injecting a stale
     // JSON block on every later turn would crowd the thread and age badly.
     messages: [
-      { role: 'user', text: state.input },
-      { role: 'model', text },
+      { role: "user", text: state.input },
+      { role: "model", text },
     ],
     models: [`respond:${model}`],
   }

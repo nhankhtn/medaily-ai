@@ -1,9 +1,9 @@
-import { rangeOf } from '../../../lib/dates.js'
-import { aggregateDailyLogs, listDailyLogs } from '../../../repositories/daily.js'
-import { spendByCategory } from '../../../repositories/finance.js'
-import { listGoals } from '../../../repositories/goals.js'
-import { listTasks } from '../../../repositories/tasks.js'
-import type { AgentStateType } from '../state.js'
+import { rangeOf } from "../../../lib/dates.js"
+import { aggregateDailyLogs, listDailyLogs } from "../../../repositories/daily.js"
+import { spendByCategory } from "../../../repositories/finance.js"
+import { listGoals } from "../../../repositories/goals.js"
+import { listTasks } from "../../../repositories/tasks.js"
+import type { AgentStateType } from "../state.js"
 
 /**
  * Fetches only what the route asked for. The responder never queries: what
@@ -14,12 +14,12 @@ import type { AgentStateType } from '../state.js'
  */
 export async function load(state: AgentStateType): Promise<Partial<AgentStateType>> {
   const decision = state.decision
-  if (!decision || decision.intent === 'smalltalk') return { context: null }
+  if (!decision || decision.intent === "smalltalk") return { context: null }
 
   const { userId, today } = state
   const range = rangeOf(decision.period, today)
 
-  if (decision.intent === 'review') {
+  if (decision.intent === "review") {
     const [current, previous, goals] = await Promise.all([
       aggregateDailyLogs({ userId, from: range.start, to: range.end }),
       // The stretch immediately before, so "worse than last week" has a number.
@@ -28,23 +28,23 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
         from: shift(range.start, range),
         to: shift(range.end, range),
       }),
-      listGoals({ userId, status: 'active', limit: 10 }),
+      listGoals({ userId, status: "active", limit: 10 }),
     ])
     return { context: { range, current, previous, goals } }
   }
 
-  if (decision.intent === 'plan') {
+  if (decision.intent === "plan") {
     const [goals, tasks] = await Promise.all([
-      listGoals({ userId, status: 'active', limit: 20 }),
+      listGoals({ userId, status: "active", limit: 20 }),
       listTasks({ userId, open: true, limit: 30 }),
     ])
     return { context: { range, goals, tasks } }
   }
 
-  if (decision.intent === 'finance') {
+  if (decision.intent === "finance") {
     const [spend, income] = await Promise.all([
-      spendByCategory({ userId, from: range.start, to: range.end, kind: 'expense' }),
-      spendByCategory({ userId, from: range.start, to: range.end, kind: 'income' }),
+      spendByCategory({ userId, from: range.start, to: range.end, kind: "expense" }),
+      spendByCategory({ userId, from: range.start, to: range.end, kind: "income" }),
     ])
     return { context: { range, spend, income } }
   }

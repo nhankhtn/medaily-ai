@@ -1,9 +1,9 @@
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { environmentName, errorParts, reportError } from '../services/alerts.js'
-import { chat } from './routes/chat.js'
-import { health } from './routes/health.js'
-import { threads } from './routes/threads.js'
+import { Hono } from "hono"
+import { cors } from "hono/cors"
+import { environmentName, errorParts, reportError } from "../services/alerts.js"
+import { chat } from "./routes/chat.js"
+import { health } from "./routes/health.js"
+import { threads } from "./routes/threads.js"
 
 /**
  * Transport only. Every route mounted here parses its own input and delegates;
@@ -12,11 +12,11 @@ import { threads } from './routes/threads.js'
  */
 export const app = new Hono()
 
-app.use('*', cors())
+app.use("*", cors())
 
-app.route('/health', health)
-app.route('/chat', chat)
-app.route('/threads', threads)
+app.route("/health", health)
+app.route("/chat", chat)
+app.route("/threads", threads)
 
 /**
  * Everything that escapes a handler, on its way to a Telegram chat — the same
@@ -28,11 +28,11 @@ app.route('/threads', threads)
  * with it. The wait is paid only when something has already gone wrong.
  */
 app.onError(async (error, c) => {
-  console.error('[http] unhandled', error)
+  console.error("[http] unhandled", error)
 
   const { message, stack } = errorParts(error)
   await reportError({
-    source: 'route',
+    source: "route",
     environment: environmentName(),
     message,
     method: c.req.method,
@@ -42,5 +42,5 @@ app.onError(async (error, c) => {
 
   // No detail: what broke is now on a phone, and the caller gets nothing it
   // could act on anyway.
-  return c.json({ error: 'failed' }, 500)
+  return c.json({ error: "failed" }, 500)
 })
