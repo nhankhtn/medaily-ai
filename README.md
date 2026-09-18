@@ -93,6 +93,13 @@ platform. The script exists because Vercel runs `build` if a package defines
 one, and esbuild — which both `tsx` and Vercel use — strips types without
 checking them. Without this, a type error deploys quietly and fails at runtime.
 
+Having a `build` script costs one thing: Vercel then insists on an output
+directory afterwards and fails the deploy with *No Output Directory named
+"public" found* when there is none. So `public/` is committed empty, and
+`vercel.json` names it in `outputDirectory`. Nothing is ever written there —
+`api/index.ts` is the whole deploy. Delete the directory and the build breaks
+again; drop the `build` script instead if the typecheck is ever not wanted.
+
 Vercel, Node runtime, one region. `vercel.json` pins `iad1` and
 `maxDuration: 300` — the Hobby plan's ceiling, and about ten times what a run
 needs.

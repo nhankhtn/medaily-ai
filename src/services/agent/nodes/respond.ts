@@ -25,6 +25,16 @@ How to write:
 - Numbers belong in the sentence that makes a claim, not in a table of their own.
 - No administrative vocabulary, and never refer to yourself or the app as a system that processes things.`
 
+/**
+ * How much of the thread the model is shown. The checkpoint still holds all of
+ * it — this is only what gets replayed.
+ *
+ * A thread no longer ends when a browser tab does: the frontend names it after
+ * the person, so one conversation runs for months. Uncapped, every question
+ * would resend a transcript that only grows, and eventually one would not fit.
+ */
+const REPLAYED_TURNS = 12
+
 export async function respond(state: AgentStateType): Promise<Partial<AgentStateType>> {
   const context = state.context
     ? `\n\nTheir numbers for this question:\n${JSON.stringify(state.context, null, 2)}`
@@ -33,12 +43,12 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
   const reason = state.decision?.reason ? `\n\n(You read this as: ${state.decision.reason})` : ''
 
   /*
-   * The whole thread is replayed, because `store: false` means Google keeps no
-   * interaction to resume. The difference from before is where it comes from:
-   * the checkpointer, not whatever the browser still had in memory.
+   * Prior turns are sent again rather than resumed: `store: false` means Google
+   * keeps no interaction to pick up. The difference from before is where they
+   * come from — the checkpointer, not whatever the browser still had in memory.
    */
   const turns: Turn[] = [
-    ...state.messages,
+    ...state.messages.slice(-REPLAYED_TURNS),
     { role: 'user', text: `${state.input}${reason}${context}` },
   ]
 
