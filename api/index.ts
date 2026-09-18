@@ -1,4 +1,4 @@
-import { handle } from 'hono/vercel'
+import { handle } from '@hono/node-server/vercel'
 import { app } from '../src/http/app.js'
 
 /**
@@ -6,6 +6,11 @@ import { app } from '../src/http/app.js'
  * app sees the original URL and routes it itself.
  *
  * Node runtime, not Edge: the checkpointer speaks the Postgres wire protocol.
+ * That is also why the adapter comes from `@hono/node-server` and not from
+ * `hono/vercel`: Vercel invokes a default export as `(req, res)`, and
+ * `hono/vercel`'s handler takes a web `Request` and returns a `Response` it
+ * never writes to `res` — every request then hangs until the function times
+ * out. This adapter is the Node request listener Vercel actually calls.
  */
 export const config = { runtime: 'nodejs' }
 

@@ -104,6 +104,22 @@ Vercel, Node runtime, one region. `vercel.json` pins `iad1` and
 `maxDuration: 300` — the Hobby plan's ceiling, and about ten times what a run
 needs.
 
+Two details the Node runtime forces, both of which fail silently as a request
+that never answers:
+
+- **The adapter is `@hono/node-server/vercel`, not `hono/vercel`.** Vercel only
+  treats a function as a web handler when it exports `fetch` or a method name
+  (`GET`, `POST`, …); a `export default` is invoked as `(req, res)`.
+  `hono/vercel`'s handler takes a `Request` and returns a `Response`, so under
+  Node it ignores `res`, nothing is ever written, and every request hangs until
+  `maxDuration` — 300 seconds of silence, no error in the logs.
+- **`NODEJS_HELPERS=0`**, set in `vercel.json` under `build.env`. It is read at
+  build time, so it belongs there rather than in the dashboard. Left on, Vercel
+  wraps the request with its own body parser, which consumes the stream and
+  replays it through a `PassThrough` that `Readable.toWeb` does not see — the
+  adapter then reads an empty body and `POST /chat` fails on a message it was
+  sent correctly.
+
 **Keep the function near Neon, not near you.** The graph writes a checkpoint
 after every node, so the function talks to the database far more than it talks
 to the browser. Moving it to Singapore to be closer to Vietnam would add a round
