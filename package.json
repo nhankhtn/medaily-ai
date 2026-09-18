@@ -11,6 +11,7 @@
     "dev": "tsx watch src/http/server.ts",
     "start": "tsx src/http/server.ts",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:setup": "tsx scripts/setup-checkpointer.ts",
     "bench": "tsx scripts/bench-checkpoint.ts",
     "lint": "eslint .",
@@ -39,7 +40,8 @@
     "prettier": "^3.9.7",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

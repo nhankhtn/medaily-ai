@@ -42,9 +42,16 @@ route ──┬── load ── respond ── END
 ```
 
 - **route** — one cheap Gemini call classifies the message into an intent
-  (`review` / `plan` / `finance` / `daily` / `smalltalk`) and a period, and
+  (`review` / `plan` / `finance` / `daily` / `smalltalk`) and a rough period, and
   writes a one-line reason in the user's own language. The reason ships with the
   answer, so a misread question is visible rather than silent.
+
+  The *dates* are not its to decide. `src/lib/period.ts` reads the stretch out
+  of the message with a regex, and the router's period is only the fallback for
+  a question that names none. Asked to do this arithmetic itself, the model
+  answered "tháng trước" with this month's numbers — it had no way to say "the
+  one before", so it routed to `month`, and `month` means the month we are in.
+
 - **load** — runs only the repositories that intent needs. A greeting skips the
   branch entirely and never touches the database.
 - **respond** — answers from the loaded numbers and the thread so far.

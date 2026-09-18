@@ -1,4 +1,4 @@
-import { rangeOf } from "../../../lib/dates.js"
+import { precedingWindow, resolveWindow } from "../../../lib/period.js"
 import { aggregateDailyLogs, listDailyLogs } from "../../../repositories/daily.js"
 import { spendByCategory } from "../../../repositories/finance.js"
 import { listGoals } from "../../../repositories/goals.js"
@@ -17,20 +17,29 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
   if (!decision || decision.intent === "smalltalk") return { context: null }
 
   const { userId, today } = state
-  const range = rangeOf(decision.period, today)
+
+  /*
+   * The window comes from what was asked, not from the route. The router's
+   * period is the fallback for a question that names no stretch of time.
+   */
+  const range = resolveWindow({ message: state.input, today, routed: decision.period })
 
   if (decision.intent === "review") {
+    const before = precedingWindow(range)
     const [current, previous, goals] = await Promise.all([
       aggregateDailyLogs({ userId, from: range.start, to: range.end }),
-      // The stretch immediately before, so "worse than last week" has a number.
-      aggregateDailyLogs({
-        userId,
-        from: shift(range.start, range),
-        to: shift(range.end, range),
-      }),
+      aggregateDailyLogs({ userId, from: before.start, to: before.end }),
       listGoals({ userId, status: "active", limit: 10 }),
     ])
-    return { context: { range, current, previous, goals } }
+    /*
+     * The comparison keeps its own dates inside it. Flat, a window and a set of
+     * totals are two sibling keys and nothing stops them being read as a pair
+     * when they are not: asked about an empty August, the model reported it
+     * with July's dates attached.
+     */
+    return {
+      context: { range, current, comparedWith: { range: before, totals: previous }, goals },
+    }
   }
 
   if (decision.intent === "plan") {
@@ -52,13 +61,4 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
   // daily — the raw rows, because the question is about a specific day.
   const logs = await listDailyLogs({ userId, from: range.start, to: range.end, limit: 14 })
   return { context: { range, logs } }
-}
-
-/** The same span, ended the day before it started. */
-function shift(date: string, range: { start: string; end: string }): string {
-  const days =
-    (Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000 + 1
-  const at = new Date(`${date}T00:00:00Z`)
-  at.setUTCDate(at.getUTCDate() - days)
-  return at.toISOString().slice(0, 10)
 }

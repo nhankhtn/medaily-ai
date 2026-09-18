@@ -32,16 +32,13 @@ export function endOfMonth(date: ISODate): ISODate {
   return at.toISOString().slice(0, 10)
 }
 
-export type Range = { start: ISODate; end: ISODate }
-
-/** The window a routed period refers to, resolved against today. */
-export function rangeOf(period: "week" | "month" | "recent", anchor: ISODate): Range {
-  if (period === "week") {
-    const start = startOfWeek(anchor)
-    return { start, end: addDays(start, 6) }
-  }
-  if (period === "month") {
-    return { start: startOfMonth(anchor), end: endOfMonth(anchor) }
-  }
-  return { start: addDays(anchor, -13), end: anchor }
+/** Whole months, so the day of the month never drifts past a short February. */
+export function addMonths(date: ISODate, months: number): ISODate {
+  const [year, month] = date.split("-").map(Number) as [number, number]
+  const zeroBased = (year * 12 + (month - 1)) + months
+  const shiftedYear = Math.floor(zeroBased / 12)
+  const shiftedMonth = zeroBased % 12
+  return `${String(shiftedYear).padStart(4, "0")}-${String(shiftedMonth + 1).padStart(2, "0")}-01`
 }
+
+export type Range = { start: ISODate; end: ISODate }
