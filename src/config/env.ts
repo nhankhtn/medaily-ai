@@ -11,7 +11,12 @@ const schema = z.object({
   GEMINI_MODEL: z.string().optional(),
   GEMINI_MODELS: z.string().optional(),
   SERVICE_TOKEN: z.string().optional(),
-  DEFAULT_USER_ID: z.string().optional(),
+
+  // Where a crash is announced. Absent, nothing is sent and the error still
+  // reaches the console, which is where it always went.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.string().default('development'),
 })

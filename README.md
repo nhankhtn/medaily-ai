@@ -87,6 +87,12 @@ elapsed time — useful for finding which node spent the nine seconds.
 
 ## Deploying
 
+`pnpm build` emits nothing — it runs `tsc --noEmit`. There is no compile step:
+`tsx` runs the TypeScript directly, and on Vercel the function is built by the
+platform. The script exists because Vercel runs `build` if a package defines
+one, and esbuild — which both `tsx` and Vercel use — strips types without
+checking them. Without this, a type error deploys quietly and fails at runtime.
+
 Vercel, Node runtime, one region. `vercel.json` pins `iad1` and
 `maxDuration: 300` — the Hobby plan's ceiling, and about ten times what a run
 needs.
@@ -99,6 +105,26 @@ trip to every node; static assets are the CDN's problem, not this service's.
 Run `corepack pnpm bench` from a deployed function — not from a laptop — to see
 what a checkpoint actually costs there. From Vietnam the number is dominated by
 the ~250ms round trip to `us-east-2` and tells you nothing about production.
+
+## When something breaks
+
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` send it to a chat — the same bot and
+chat the frontend uses, so one place shows both services and the first line of
+the message says which one it was.
+
+Two hooks cover the service. `app.onError` catches anything that escapes a
+handler. The chat routes catch their own failures and turn them into a 500, so
+those report themselves: from the outside that request looks answered, and it is
+exactly the case worth hearing about.
+
+Everything is redacted on the way out (`src/lib/alerts/redact.ts`) and rate
+limited per process (`src/lib/alerts/gate.ts`): the same failure at most once
+every five minutes, twenty an hour. A model chain out of quota fails on every
+question, and that is one thing to know, not one per person asking.
+
+Unset, nothing is sent and errors go to the console as before. Set them on the
+deploy rather than in `.env.local`, or every typo on your own machine buzzes
+your phone. `/health` reports whether they are configured.
 
 ## Notes
 
