@@ -1,4 +1,4 @@
-import { sql } from '../infra/db'
+import { sql } from '../infra/db.js'
 
 /** Resolves the owner when a request does not name one — the single-user case. */
 export async function firstUserId(): Promise<string | null> {

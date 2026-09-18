@@ -1,9 +1,9 @@
-import { rangeOf } from '../../../lib/dates'
-import { aggregateDailyLogs, listDailyLogs } from '../../../repositories/daily'
-import { spendByCategory } from '../../../repositories/finance'
-import { listGoals } from '../../../repositories/goals'
-import { listTasks } from '../../../repositories/tasks'
-import type { AgentStateType } from '../state'
+import { rangeOf } from '../../../lib/dates.js'
+import { aggregateDailyLogs, listDailyLogs } from '../../../repositories/daily.js'
+import { spendByCategory } from '../../../repositories/finance.js'
+import { listGoals } from '../../../repositories/goals.js'
+import { listTasks } from '../../../repositories/tasks.js'
+import type { AgentStateType } from '../state.js'
 
 /**
  * Fetches only what the route asked for. The responder never queries: what

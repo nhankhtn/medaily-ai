@@ -1,6 +1,6 @@
-import { env } from "../config/env";
-import { createGate } from "../lib/alerts/gate";
-import { reportKey, reportText, type ErrorReport } from "../lib/alerts/report";
+import { env } from "../config/env.js";
+import { createGate } from "../lib/alerts/gate.js";
+import { reportKey, reportText, type ErrorReport } from "../lib/alerts/report.js";
 
 /**
  * Tells a Telegram chat that something broke.

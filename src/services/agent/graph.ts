@@ -1,9 +1,9 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
-import { checkpointer } from '../../infra/checkpointer'
-import { load } from './nodes/load'
-import { respond } from './nodes/respond'
-import { route } from './nodes/route'
-import { AgentState } from './state'
+import { checkpointer } from '../../infra/checkpointer.js'
+import { load } from './nodes/load.js'
+import { respond } from './nodes/respond.js'
+import { route } from './nodes/route.js'
+import { AgentState } from './state.js'
 
 /**
  *   route ──┬── load ── respond ── END

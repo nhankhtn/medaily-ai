@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { environmentName, errorParts, reportError } from '../services/alerts'
-import { chat } from './routes/chat'
-import { health } from './routes/health'
-import { threads } from './routes/threads'
+import { environmentName, errorParts, reportError } from '../services/alerts.js'
+import { chat } from './routes/chat.js'
+import { health } from './routes/health.js'
+import { threads } from './routes/threads.js'
 
 /**
  * Transport only. Every route mounted here parses its own input and delegates;

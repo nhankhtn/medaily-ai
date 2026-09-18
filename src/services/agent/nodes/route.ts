@@ -1,5 +1,5 @@
-import { generateJson } from '../../gemini'
-import type { AgentStateType, Decision, Intent, Period } from '../state'
+import { generateJson } from '../../gemini.js'
+import type { AgentStateType, Decision, Intent, Period } from '../state.js'
 
 /**
  * The decision the capture box used to make by asking the person to type a

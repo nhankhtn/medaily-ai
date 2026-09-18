@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { env } from "../../config/env";
-import { dbConfigured, sql } from "../../infra/db";
-import { alertsEnabled } from "../../services/alerts";
-import { geminiEnabled, geminiModels } from "../../services/gemini";
+import { env } from "../../config/env.js";
+import { dbConfigured, sql } from "../../infra/db.js";
+import { alertsEnabled } from "../../services/alerts.js";
+import { geminiEnabled, geminiModels } from "../../services/gemini.js";
 
 /**
  * Says what is configured and whether the database answers. No token: this is

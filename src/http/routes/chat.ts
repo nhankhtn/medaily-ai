@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { today } from "../../lib/dates";
-import { firstUserId } from "../../repositories/users";
+import { today } from "../../lib/dates.js";
+import { firstUserId } from "../../repositories/users.js";
 import {
   environmentName,
   errorParts,
   reportError,
-} from "../../services/alerts";
-import { graph } from "../../services/agent/graph";
-import { requireToken } from "../middleware/auth";
+} from "../../services/alerts.js";
+import { graph } from "../../services/agent/graph.js";
+import { requireToken } from "../middleware/auth.js";
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(2000),

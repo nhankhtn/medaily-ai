@@ -1,6 +1,6 @@
-import '../lib/net'
+import '../lib/net.js'
 import postgres from 'postgres'
-import { env } from '../config/env'
+import { env } from '../config/env.js'
 
 /**
  * Read-only as far as this service is concerned: the agent looks at the app's

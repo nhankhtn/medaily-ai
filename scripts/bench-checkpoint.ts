@@ -1,9 +1,9 @@
-import '../src/config/load-env'
+import '../src/config/load-env.js'
 import { Annotation, END, MemorySaver, START, StateGraph } from '@langchain/langgraph'
 import type { BaseCheckpointSaver } from '@langchain/langgraph'
-import { checkpointer, setupCheckpointer } from '../src/infra/checkpointer'
-import { env } from '../src/config/env'
-import { sql } from '../src/infra/db'
+import { checkpointer, setupCheckpointer } from '../src/infra/checkpointer.js'
+import { env } from '../src/config/env.js'
+import { sql } from '../src/infra/db.js'
 
 /**
  * The one number that decides whether the graph belongs on Vercel: what a

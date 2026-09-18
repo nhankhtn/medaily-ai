@@ -1,4 +1,4 @@
-import { redact } from "./redact";
+import { redact } from "./redact.js";
 
 /** Telegram refuses a `sendMessage` body longer than this. */
 export const TELEGRAM_LIMIT = 4096;

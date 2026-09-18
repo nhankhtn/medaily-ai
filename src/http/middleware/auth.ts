@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { createMiddleware } from 'hono/factory'
-import { env } from '../../config/env'
+import { env } from '../../config/env.js'
 
 /**
  * A shared secret, not a session. The frontend holds `SERVICE_TOKEN` server-side

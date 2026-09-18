@@ -1,6 +1,6 @@
 import { Annotation } from '@langchain/langgraph'
-import type { Turn } from '../gemini'
-import type { ISODate } from '../../lib/dates'
+import type { Turn } from '../gemini.js'
+import type { ISODate } from '../../lib/dates.js'
 
 /**
  * What the router decided, kept in state rather than hidden inside a node.

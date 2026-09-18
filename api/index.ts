@@ -1,5 +1,5 @@
 import { handle } from 'hono/vercel'
-import { app } from '../src/http/app'
+import { app } from '../src/http/app.js'
 
 /**
  * The Vercel entry point. `vercel.json` rewrites every path here, so the Hono

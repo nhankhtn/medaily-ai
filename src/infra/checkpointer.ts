@@ -1,6 +1,6 @@
-import '../lib/net'
+import '../lib/net.js'
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
-import { env } from '../config/env'
+import { env } from '../config/env.js'
 
 /**
  * Thread memory lives in the same Neon database the app already uses, in its

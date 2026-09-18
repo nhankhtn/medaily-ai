@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { checkpointer } from '../../infra/checkpointer'
-import { graph } from '../../services/agent/graph'
-import { requireToken } from '../middleware/auth'
+import { checkpointer } from '../../infra/checkpointer.js'
+import { graph } from '../../services/agent/graph.js'
+import { requireToken } from '../middleware/auth.js'
 
 /**
  * Reading a thread back out of the checkpointer is the proof that memory stuck:

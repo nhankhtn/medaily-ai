@@ -1,4 +1,4 @@
-import { env } from '../config/env'
+import { env } from '../config/env.js'
 
 /**
  * The frontend's Gemini client, carried over unchanged in behaviour so both
