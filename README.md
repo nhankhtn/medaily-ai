@@ -69,17 +69,17 @@ curl localhost:3001/health
 TOKEN=$(grep '^SERVICE_TOKEN=' .env.local | cut -d= -f2)
 
 # Start a thread. The reply carries the threadId back.
-curl -sX POST localhost:3001/chat \
+curl -sX POST localhost:3001/api/chat \
   -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"message":"tuần này tôi thế nào"}'
 
 # Continue it — this is the part the old chat could not do.
-curl -sX POST localhost:3001/chat \
+curl -sX POST localhost:3001/api/chat \
   -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"message":"còn tháng trước?","threadId":"<from above>"}'
 
 # Read the thread back out of Postgres.
-curl -s -H "authorization: Bearer $TOKEN" localhost:3001/threads/<id>
+curl -s -H "authorization: Bearer $TOKEN" localhost:3001/api/threads/<id>
 ```
 
 ## Style and lint
@@ -104,7 +104,7 @@ In VS Code, `.vscode/settings.json` formats on save and applies ESLint's fixes;
 `importModuleSpecifierEnding: "js"`, so auto-import writes the `.js` that Node's
 ESM loader needs instead of leaving it for the build to catch.
 
-`POST /chat/stream` runs the same thing as SSE, one event per node with the
+`POST /api/chat/stream` runs the same thing as SSE, one event per node with the
 elapsed time — useful for finding which node spent the nine seconds.
 
 ## Deploying
@@ -139,7 +139,7 @@ that never answers:
   build time, so it belongs there rather than in the dashboard. Left on, Vercel
   wraps the request with its own body parser, which consumes the stream and
   replays it through a `PassThrough` that `Readable.toWeb` does not see — the
-  adapter then reads an empty body and `POST /chat` fails on a message it was
+  adapter then reads an empty body and `POST /api/chat` fails on a message it was
   sent correctly.
 
 **Keep the function near Neon, not near you.** The graph writes a checkpoint
@@ -189,7 +189,7 @@ and failing that it makes one up. Whatever arrives is normalised before it
 reaches a log line — it came from outside.
 
 ```
-[http]   [req 3f9a1c07] POST /chat 500 6332ms
+[http]   [req 3f9a1c07] POST /api/chat 500 6332ms
 [gemini] [req 3f9a1c07] gemini-3.5-flash-lite on key #1
 [chat]   [req 3f9a1c07] run failed GeminiError: …
 ```
@@ -219,7 +219,7 @@ never hold anything back.
 An unreadable value falls back to `info`: a typo in a log setting must not be
 what takes the service down. `/health` reports the level in effect.
 
-For `/chat/stream` the access line's duration is time to the first byte, not to
+For `/api/chat/stream` the access line's duration is time to the first byte, not to
 the last — the response returns when the stream opens. The lines the run writes
 carry the same id and the real timings.
 

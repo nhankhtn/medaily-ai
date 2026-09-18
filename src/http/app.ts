@@ -18,9 +18,20 @@ export const app = new Hono()
 app.use("*", requestId)
 app.use("*", cors())
 
+/*
+ * `/health` stays at the root: it is the endpoint you reach for before
+ * anything else works, and it answers for the service rather than the API.
+ *
+ * Everything else is mounted under `/api` in one step. `app.route()` returns
+ * the app it was called on, not the sub-app, so building the group first and
+ * mounting it once is the only shape that actually nests.
+ */
 app.route("/health", health)
-app.route("/chat", chat)
-app.route("/threads", threads)
+
+const api = new Hono()
+api.route("/chat", chat)
+api.route("/threads", threads)
+app.route("/api", api)
 
 /**
  * Everything that escapes a handler, on its way to a Telegram chat — the same
