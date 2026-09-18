@@ -10,6 +10,13 @@ import type { ISODate } from "../../lib/dates.js"
 export type Intent = "review" | "plan" | "finance" | "daily" | "smalltalk"
 export type Period = "week" | "month" | "recent"
 
+/**
+ * A turn as the thread stores it. `at` is what tells a follow-up from a fresh
+ * question weeks later; the model never sees it — `generateText` reads only
+ * `role` and `text`.
+ */
+export type Message = Turn & { at?: string }
+
 export type Decision = {
   intent: Intent
   period: Period
@@ -23,7 +30,7 @@ export type Decision = {
  * replaying whatever the browser still had in a React state.
  */
 export const AgentState = Annotation.Root({
-  messages: Annotation<Turn[]>({
+  messages: Annotation<Message[]>({
     reducer: (previous, next) => [...previous, ...next],
     default: () => [],
   }),

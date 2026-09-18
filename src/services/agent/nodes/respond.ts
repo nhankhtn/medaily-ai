@@ -1,4 +1,5 @@
 import { generateText, type Turn } from "../../gemini.js"
+import { liveTurns } from "../../../lib/session.js"
 import type { AgentStateType } from "../state.js"
 
 /**
@@ -49,8 +50,11 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
    * keeps no interaction to pick up. The difference from before is where they
    * come from — the checkpointer, not whatever the browser still had in memory.
    */
+  const now = Date.now()
   const turns: Turn[] = [
-    ...state.messages.slice(-REPLAYED_TURNS),
+    // Only the conversation still in progress. A thread that has been quiet
+    // since yesterday is history, not context.
+    ...liveTurns(state.messages, now).slice(-REPLAYED_TURNS),
     { role: "user", text: `${state.input}${reason}${context}` },
   ]
 
@@ -61,8 +65,8 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
     // Only the plain message and answer are remembered. Re-injecting a stale
     // JSON block on every later turn would crowd the thread and age badly.
     messages: [
-      { role: "user", text: state.input },
-      { role: "model", text },
+      { role: "user", text: state.input, at: new Date(now).toISOString() },
+      { role: "model", text, at: new Date().toISOString() },
     ],
     models: [`respond:${model}`],
   }

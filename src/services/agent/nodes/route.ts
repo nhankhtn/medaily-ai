@@ -1,4 +1,5 @@
 import { generateJson } from "../../gemini.js"
+import { liveTurns } from "../../../lib/session.js"
 import type { AgentStateType, Decision, Intent, Period } from "../state.js"
 
 /**
@@ -45,8 +46,12 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
    * The last few turns go in with the message: "còn tháng trước thì sao" is
    * only answerable against what was just asked. Two exchanges is enough to
    * carry a follow-up without paying for the whole thread on a routing call.
+   *
+   * Only from the conversation still in progress. This is the node where a
+   * stale topic does the most damage: it decides what the question is about,
+   * and everything downstream follows that decision without questioning it.
    */
-  const recent = state.messages
+  const recent = liveTurns(state.messages, Date.now())
     .slice(-4)
     .map((turn) => `${turn.role === "user" ? "Họ" : "App"}: ${turn.text}`)
     .join("\n")
