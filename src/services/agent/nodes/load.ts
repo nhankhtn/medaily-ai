@@ -3,6 +3,7 @@ import { aggregateDailyLogs, listDailyLogs } from "../../../repositories/daily.j
 import { spendByCategory } from "../../../repositories/finance.js"
 import { listGoals } from "../../../repositories/goals.js"
 import { listTasks } from "../../../repositories/tasks.js"
+import { GUIDE } from "../guide.js"
 import type { AgentStateType } from "../state.js"
 
 /**
@@ -15,6 +16,13 @@ import type { AgentStateType } from "../state.js"
 export async function load(state: AgentStateType): Promise<Partial<AgentStateType>> {
   const decision = state.decision
   if (!decision || decision.intent === "smalltalk") return { context: null }
+
+  /*
+   * A question about the app is not a question about the person: the guide is
+   * the same for everyone, it needs no window, and this branch reaches no
+   * repository. Nothing personal is read to answer "làm sao để thêm thói quen".
+   */
+  if (decision.intent === "help") return { context: { guide: GUIDE } }
 
   const { userId, today } = state
 

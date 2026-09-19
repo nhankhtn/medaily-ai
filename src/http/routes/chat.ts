@@ -5,7 +5,12 @@ import { today } from "../../lib/dates.js"
 import { currentRequestId, log } from "../../lib/log.js"
 import { environmentName, errorParts, reportError } from "../../services/alerts.js"
 import { graph } from "../../services/agent/graph.js"
+import { nextStep } from "../../services/agent/steps.js"
+import type { Decision } from "../../services/agent/state.js"
 import { requireToken } from "../middleware/auth.js"
+
+/** As much of a node's patch as the panel stream reads. */
+type Patch = { decision?: Decision; answer?: string } | undefined
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
@@ -58,6 +63,59 @@ export const chat = new Hono()
         500,
       )
     }
+  })
+  /**
+   * The same run, as a panel wants it: which step is running, how the message
+   * was read, and either the answer or the form it belongs in — and nothing
+   * else.
+   *
+   * Separate from `/stream` because they answer different questions. That one
+   * is for whoever is debugging a nine-second run and needs every patch; this
+   * one is for a person waiting, and sending them the rows the agent loaded to
+   * write the answer would be a payload with no reader.
+   *
+   * The reading arrives long before the answer does, which is the point: a
+   * question taken the wrong way is worth seeing while rephrasing is still
+   * cheaper than reading a wrong answer.
+   */
+  .post("/live", async (c) => {
+    const parsed = chatSchema.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: "invalid_input", detail: parsed.error.issues }, 400)
+
+    const { userId, threadId, today: anchor } = runContext(parsed.data)
+
+    return streamSSE(c, async (stream) => {
+      const send = (event: string, data: unknown) =>
+        stream.writeSSE({ event, data: JSON.stringify(data) })
+
+      try {
+        const updates = await graph().stream(
+          { input: parsed.data.message, userId, today: anchor },
+          { configurable: { thread_id: threadId }, streamMode: "updates" },
+        )
+
+        let decision: Decision | undefined
+
+        for await (const update of updates) {
+          for (const [node, patch] of Object.entries(update as Record<string, Patch>)) {
+            if (patch?.decision) {
+              decision = patch.decision
+              if (decision.reason) await send("reason", { reason: decision.reason })
+              // The reading first, then where it goes: the panel is about to
+              // swap itself out, and this is the last chance to say why.
+              if (decision.filing !== "none") await send("file", { module: decision.filing })
+            }
+
+            const running = nextStep(node, decision)
+            if (running) await send("step", { node: running })
+            if (patch?.answer) await send("answer", { answer: patch.answer })
+          }
+        }
+      } catch (error) {
+        await reportHandled("chat/live", error, threadId)
+        await send("failed", { requestId: currentRequestId() })
+      }
+    })
   })
   /**
    * The same run, reported node by node. Worth having before any UI consumes

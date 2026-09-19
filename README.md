@@ -18,6 +18,9 @@ Here, a router node makes that decision and records why, and LangGraph's
 checkpointer keeps the thread in Postgres, so a conversation survives a refresh,
 a different device, and a redeploy.
 
+What it does not do yet, and what that would cost, is in
+[ROADMAP.md](ROADMAP.md).
+
 ## Layout
 
 ```
@@ -38,13 +41,23 @@ Nothing under `services` knows it is reached over HTTP, and nothing under
 
 ```
 route ──┬── load ── respond ── END
-        └────────────┘
+        ├────────────┘
+        └── END
 ```
 
 - **route** — one cheap Gemini call classifies the message into an intent
-  (`review` / `plan` / `finance` / `daily` / `smalltalk`) and a rough period, and
-  writes a one-line reason in the user's own language. The reason ships with the
+  (`review` / `plan` / `finance` / `daily` / `help` / `smalltalk`) and a rough
+  period, and writes a one-line reason in the user's own language. The reason ships with the
   answer, so a misread question is visible rather than silent.
+
+  It also decides whether this is a question at all. `filing` is a second axis,
+  not another intent: `finance` the intent is *asking* about money, `finance`
+  the filing is *telling* us money moved, and "tháng này tiêu 30k" and "tháng
+  này tiêu bao nhiêu" are the same six words apart. A filed note stops the run
+  — there is nothing to answer, and the panel opens the form that writes it
+  down. On a message that could honestly be read either way the router is told
+  to choose the question: an answer nobody wanted costs a sentence, a form
+  nobody wanted costs the answer they came for.
 
   The *dates* are not its to decide. `src/lib/period.ts` reads the stretch out
   of the message with a regex, and the router's period is only the fallback for
@@ -53,8 +66,14 @@ route ──┬── load ── respond ── END
   one before", so it routed to `month`, and `month` means the month we are in.
 
 - **load** — runs only the repositories that intent needs. A greeting skips the
-  branch entirely and never touches the database.
-- **respond** — answers from the loaded numbers and the thread so far.
+  branch entirely and never touches the database, and `help` reaches no
+  repository either: it is answered from `services/agent/guide.ts`, the app's
+  own pages written down, so "làm sao để ghi một khoản chi" has a right answer
+  rather than a plausible one.
+- **respond** — answers from the loaded numbers and the thread so far. A `help`
+  turn gets its own system prompt: every rule in the other one is about the
+  numbers, down to the last one, which would answer "how do I add a habit" with
+  "you have nothing logged for that stretch".
 
 State, including the conversation, is checkpointed to Postgres under a
 `thread_id` after every node.
@@ -111,8 +130,16 @@ In VS Code, `.vscode/settings.json` formats on save and applies ESLint's fixes;
 `importModuleSpecifierEnding: "js"`, so auto-import writes the `.js` that Node's
 ESM loader needs instead of leaving it for the build to catch.
 
-`POST /api/chat/stream` runs the same thing as SSE, one event per node with the
-elapsed time — useful for finding which node spent the nine seconds.
+Two streaming routes, for two readers.
+
+`POST /api/chat/live` is what a panel consumes: `reason` as soon as the router
+has one, `step` naming the node now running, and then either `answer` or
+`file` — the form a note belongs in. Nothing else. The rows loaded to write an
+answer are a payload with no reader.
+
+`POST /api/chat/stream` is what a person debugging consumes: one event per node
+with the whole patch and the elapsed time, useful for finding which node spent
+the nine seconds.
 
 ## Deploying
 

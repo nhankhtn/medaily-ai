@@ -7,7 +7,7 @@ import type { ISODate } from "../../lib/dates.js"
  * A decision you can read back is the point of the graph: when the agent
  * answers the wrong question, the reason it chose that route is on the run.
  */
-export type Intent = "review" | "plan" | "finance" | "daily" | "smalltalk"
+export type Intent = "review" | "plan" | "finance" | "daily" | "help" | "smalltalk"
 export type Period = "week" | "month" | "recent"
 
 /**
@@ -17,9 +17,22 @@ export type Period = "week" | "month" | "recent"
  */
 export type Message = Turn & { at?: string }
 
+/**
+ * Where a message goes when it is not a question.
+ *
+ * A second axis, not another intent: "finance" the intent is *asking* about
+ * money, "finance" the filing is *telling* us money moved. The same six words
+ * can be either, so the two are decided separately and read separately.
+ *
+ * Only the two destinations that write. There is no filing for a day's notes
+ * because the app has no form for one.
+ */
+export type Filing = "none" | "finance" | "plan"
+
 export type Decision = {
   intent: Intent
   period: Period
+  filing: Filing
   /** One line, in the user's language, saying why. Shown, not just logged. */
   reason: string
 }
