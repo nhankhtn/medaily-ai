@@ -2,25 +2,18 @@ import { Hono } from "hono"
 import { z } from "zod"
 import { currentRequestId, log } from "../../lib/log.js"
 import { environmentName, errorParts, reportError } from "../../services/alerts.js"
-import {
-  generateNarrative,
-  narrativeEnabled,
-  PROMPT_VERSION,
-  type ReportContext,
-} from "../../services/report.js"
+import { generateNarrative, PROMPT_VERSION, type ReportContext } from "../../services/report.js"
 import { requireToken } from "../middleware/auth.js"
+import { geminiEnabled } from "../../services/gemini.js"
 
 /**
  * The written review of a period.
  *
- * On its own provider, and therefore on its own switch: a deploy can have
- * Gemini and not Anthropic, and then everything else here still works and this
- * one route says so rather than failing. The caller reads the 503 and does not
- * offer the button.
- *
- * The numbers arrive in the request. Which model wrote it and which prompt it
- * came from go back with the text, because the caller files them alongside the
- * review and a prompt change has to be visible in that table afterwards.
+ * Same Gemini switch as everything else: without a key this route answers 503
+ * and the caller treats it as not offered. The numbers arrive in the request.
+ * Which model wrote it and which prompt it came from go back with the text,
+ * because the caller files them alongside the review and a prompt change has
+ * to be visible in that table afterwards.
  */
 const contextSchema = z
   .object({
@@ -33,7 +26,7 @@ const contextSchema = z
   .loose()
 
 export const report = new Hono().use("*", requireToken).post("/narrative", async (c) => {
-  if (!narrativeEnabled()) return c.json({ error: "disabled" }, 503)
+  if (!geminiEnabled()) return c.json({ error: "disabled" }, 503)
 
   const parsed = contextSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: "invalid_input", detail: parsed.error.issues }, 400)

@@ -12,8 +12,6 @@ const schema = z.object({
   GEMINI_API_KEYS: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_MODELS: z.string().optional(),
-  /** A second provider, for the one feature that asks for a long written review. */
-  ANTHROPIC_API_KEY: z.string().optional(),
 
   SERVICE_TOKEN: z.string().optional(),
 

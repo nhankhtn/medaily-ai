@@ -1,24 +1,19 @@
-import Anthropic from "@anthropic-ai/sdk"
-import { env } from "../config/env.js"
+import { generateText } from "./gemini.js"
 
 /**
- * The written review of a period, from a second provider.
+ * The written review of a period.
  *
- * Anthropic rather than Gemini, and deliberately: this is the one thing asked
- * for here that is a piece of writing rather than an extraction, and it is
- * asked for once a week by one person. The cost of a slower, better model is
- * one request; the cost of a worse one is the only text anybody reads twice.
+ * Same Gemini chain as every other feature here. It used to sit on a second
+ * provider because a long piece of writing felt worth a slower model; that
+ * split meant the rest of the service could be up while this one route said
+ * "disabled". One key is simpler, and the chain already steps up when a flash
+ * model will not do.
  *
  * Grounded strictly in the aggregates handed to it. Only numbers arrive — no
  * notes, no journal entries, no names — and nothing is read from a database
  * here, because the app that has them also owns the page the review lands on.
  */
-export const REPORT_MODEL = "claude-opus-5"
-export const PROMPT_VERSION = "v1"
-
-export function narrativeEnabled(): boolean {
-  return Boolean(env.ANTHROPIC_API_KEY)
-}
+export const PROMPT_VERSION = "v2"
 
 export type ReportContext = {
   period: "weekly" | "monthly"
@@ -47,40 +42,16 @@ Format: GitHub-flavoured Markdown, at most 250 words, in this shape:
 
 Write in ENGLISH if locale is "en" and in VIETNAMESE if locale is "vi".`
 
-
 export async function generateNarrative(
   context: ReportContext,
 ): Promise<{ text: string; model: string }> {
-  const apiKey = env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set")
-
-  const client = new Anthropic({ apiKey })
-
-  const response = await client.messages.create({
-    model: REPORT_MODEL,
-    max_tokens: 16000,
-    system: SYSTEM_PROMPT,
-    // Adaptive thinking: the model decides how much reasoning this needs.
-    thinking: { type: "adaptive" },
-    output_config: { effort: "medium" },
-    messages: [
+  return generateText({
+    systemInstruction: SYSTEM_PROMPT,
+    turns: [
       {
         role: "user",
-        content: `Here is the data. Return only the review.\n\n${JSON.stringify(context, null, 2)}`,
+        text: `Here is the data. Return only the review.\n\n${JSON.stringify(context, null, 2)}`,
       },
     ],
   })
-
-  if (response.stop_reason === "refusal") {
-    throw new Error("the model declined to answer this request")
-  }
-
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("\n")
-    .trim()
-
-  if (!text) throw new Error("the model returned no text")
-  return { text, model: REPORT_MODEL }
 }

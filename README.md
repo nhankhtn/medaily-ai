@@ -148,11 +148,8 @@ The capture, review and report routes read no database and hold no state:
 everything about the person arrives in the request, because the app that has it
 also owns the form or the page the answer goes into.
 
-`report/narrative` is the one route on a second provider. A long piece of
-writing, asked for once a week by one person, is worth a slower and better
-model than an extraction is — so it runs on Anthropic, and it is the only thing
-here that does. Without `ANTHROPIC_API_KEY` that route answers 503 and
-everything else is unaffected.
+`report/narrative` runs on the same Gemini chain as capture and review chat.
+Without a Gemini key that route answers 503 with everything else that needs one.
 
 Two streaming routes, for two readers.
 
