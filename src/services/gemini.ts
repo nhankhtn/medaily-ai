@@ -109,6 +109,21 @@ export class GeminiError extends Error {
   }
 }
 
+/**
+ * A 200 that carried no answer: the model reasoned and then said nothing.
+ *
+ * Its own class because it is the one failure with no status to read, and
+ * because what to do about it is the opposite of what the absence of a status
+ * would otherwise mean. Another model answers this one — the frontend learned
+ * that the hard way, on a `/reviews` page that stopped dead on it.
+ */
+export class EmptyAnswerError extends GeminiError {
+  constructor(message: string, model: string) {
+    super(message, null, model)
+    this.name = "EmptyAnswerError"
+  }
+}
+
 type Step = "key" | "model" | "stop"
 
 /**
@@ -118,10 +133,12 @@ type Step = "key" | "model" | "stop"
  * another key still has its own, and rotating to it keeps the cheap model. 503
  * is that model overloaded on Google's side and 404 is that model not existing
  * for this project; neither is about the key, so the next thing to change is
- * the model. Anything else is about the request itself, and repeating it
- * elsewhere only spends the budget.
+ * the model. An answer with nothing in it is the same kind of problem as an
+ * overloaded model: this one will not do it, another might. Anything else is
+ * about the request itself, and repeating it elsewhere only spends the budget.
  */
 function nextStep(error: unknown): Step {
+  if (error instanceof EmptyAnswerError) return "model"
   if (!(error instanceof GeminiError)) return "stop"
   if (error.status === 429) return "key"
   if (error.status === 404 || error.status === 503) return "model"
@@ -362,7 +379,7 @@ async function requestJson<T>(
   )
 
   const text = outputTextOf(body)
-  if (!text) throw new GeminiError("gemini returned no text", null, model)
+  if (!text) throw new EmptyAnswerError("gemini returned no text", model)
 
   try {
     return JSON.parse(text) as T
@@ -399,7 +416,7 @@ async function requestText(
   )
 
   const text = outputTextOf(body)
-  if (!text) throw new GeminiError("gemini returned no text", null, model)
+  if (!text) throw new EmptyAnswerError("gemini returned no text", model)
   return text
 }
 

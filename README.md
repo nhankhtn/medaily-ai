@@ -130,6 +130,30 @@ In VS Code, `.vscode/settings.json` formats on save and applies ESLint's fixes;
 `importModuleSpecifierEnding: "js"`, so auto-import writes the `.js` that Node's
 ESM loader needs instead of leaving it for the build to catch.
 
+### The routes
+
+| | |
+| --- | --- |
+| `POST /api/chat/live` | the assistant, streamed for a panel |
+| `POST /api/chat/stream` | the same run, streamed for whoever is debugging it |
+| `POST /api/chat` | the same run, one JSON answer |
+| `DELETE /api/threads/:id` | end a conversation |
+| `POST /api/capture/finance` | a note read into transactions |
+| `POST /api/capture/plan` | a note read into goals and tasks |
+| `POST /api/review/ask` | a conversation about one period, from context sent in |
+| `POST /api/review/translate` | one answer, rewritten in the other language |
+| `POST /api/report/narrative` | the written review of a period |
+
+The capture, review and report routes read no database and hold no state:
+everything about the person arrives in the request, because the app that has it
+also owns the form or the page the answer goes into.
+
+`report/narrative` is the one route on a second provider. A long piece of
+writing, asked for once a week by one person, is worth a slower and better
+model than an extraction is — so it runs on Anthropic, and it is the only thing
+here that does. Without `ANTHROPIC_API_KEY` that route answers 503 and
+everything else is unaffected.
+
 Two streaming routes, for two readers.
 
 `POST /api/chat/live` is what a panel consumes: `reason` as soon as the router

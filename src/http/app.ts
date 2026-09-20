@@ -3,8 +3,11 @@ import { cors } from "hono/cors"
 import { currentRequestId, log } from "../lib/log.js"
 import { environmentName, errorParts, reportError } from "../services/alerts.js"
 import { requestId } from "./middleware/request-id.js"
+import { capture } from "./routes/capture.js"
 import { chat } from "./routes/chat.js"
 import { health } from "./routes/health.js"
+import { report } from "./routes/report.js"
+import { review } from "./routes/review.js"
 import { threads } from "./routes/threads.js"
 
 /**
@@ -29,7 +32,10 @@ app.use("*", cors())
 app.route("/health", health)
 
 const api = new Hono()
+api.route("/capture", capture)
 api.route("/chat", chat)
+api.route("/report", report)
+api.route("/review", review)
 api.route("/threads", threads)
 app.route("/api", api)
 
