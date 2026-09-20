@@ -9,7 +9,7 @@ import type { ISODate } from "../../lib/dates.js"
  * The caller checks the answer again before it renders — a row off a model is
  * untrusted whichever side of the wire it was asked for.
  */
-export type CategoryOption = { name: string; kind: string }
+export type CategoryOption = { name: string; kind: string; note?: string }
 
 export type ParsedTransaction = {
   occurred_on?: string
@@ -36,7 +36,7 @@ Dates: resolve every relative word against the note's date, given below. "sáng 
 
 Kind: "expense" for money going out, "income" for money coming in (salary, refunds, gifts received). Default to "expense". Transfers between the user's own accounts are out of scope — record them as expense and let the user correct it.
 
-Category: choose one name, copied exactly, from the list of the user's categories below. Use "" when none of them fits. Never write a category name that is not on the list.
+Category: choose one name, copied exactly, from the list of the user's categories below. Some names include a short note after an em dash (—) that explains what belongs there — use that note to disambiguate, but still return only the category name itself, never the note, and never a name that is not on the list. Use "" when none of them fits.
 
 Merchant: the shop, place or short label the text names ("phở Thìn", "Highlands", "ăn sáng"). Keep it under 60 characters and in the language the user wrote it. Use "" if there is nothing to name.
 
@@ -65,6 +65,10 @@ const SCHEMA: JsonSchema = {
   required: ['transactions'],
 }
 
+function formatCategory(category: CategoryOption): string {
+  const note = category.note?.trim()
+  return note ? `${category.name} — ${note}` : category.name
+}
 
 export async function parseTransactions(input: {
   text: string
@@ -76,7 +80,7 @@ export async function parseTransactions(input: {
   const names = (kind: string) =>
     input.categories
       .filter((category) => category.kind === kind)
-      .map((category) => category.name)
+      .map(formatCategory)
       .join(" | ") || "(none)"
 
   const schema = {

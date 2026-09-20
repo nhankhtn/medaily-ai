@@ -26,7 +26,13 @@ const financeSchema = z.object({
   timezone: z.string().optional(),
   currency: z.string().min(1).max(8),
   categories: z
-    .array(z.object({ name: z.string().max(80), kind: z.string().max(20) }))
+    .array(
+      z.object({
+        name: z.string().max(80),
+        kind: z.string().max(20),
+        note: z.string().max(500).optional(),
+      }),
+    )
     .max(200)
     .default([]),
   /** The caller's form decides how many rows it can show. */
