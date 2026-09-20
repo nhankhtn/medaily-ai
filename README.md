@@ -134,7 +134,7 @@ ESM loader needs instead of leaving it for the build to catch.
 
 | | |
 | --- | --- |
-| `POST /api/chat/live` | the assistant, streamed for a panel |
+| `POST /api/chat/live` | the assistant, streamed for a panel (`step` / `reason` / `delta` / `answer`) |
 | `POST /api/chat/stream` | the same run, streamed for whoever is debugging it |
 | `POST /api/chat` | the same run, one JSON answer |
 | `DELETE /api/threads/:id` | end a conversation |

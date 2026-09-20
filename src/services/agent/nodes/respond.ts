@@ -1,4 +1,5 @@
-import { generateText, type Turn } from "../../gemini.js"
+import { writer } from "@langchain/langgraph"
+import { streamText, type Turn } from "../../gemini.js"
 import { liveTurns } from "../../../lib/session.js"
 import type { AgentStateType } from "../state.js"
 
@@ -88,10 +89,15 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
     { role: "user", text: `${state.input}${reason}${context}` },
   ]
 
-  const { text, model } = await generateText({
-    systemInstruction: help ? HELP_PROMPT : DATA_PROMPT,
-    turns,
-  })
+  const { text, model } = await streamText(
+    {
+      systemInstruction: help ? HELP_PROMPT : DATA_PROMPT,
+      turns,
+    },
+    // Custom stream: each delta reaches `/live` while this node is still open.
+    // Absent (plain `invoke`), the writer is a no-op and the answer arrives whole.
+    (delta) => writer({ delta }),
+  )
 
   return {
     answer: text,

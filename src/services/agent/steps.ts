@@ -6,7 +6,9 @@ import type { Decision } from "./state.js"
  * Both answers come from the same decision, so they are written once here. The
  * graph asks the first question to pick an edge; the panel stream asks the
  * second, because `streamMode: "updates"` reports a node when it is *done* and
- * a person waiting wants to know what it is waiting for.
+ * a person waiting wants to know what it is waiting for. Token deltas ride a
+ * parallel `"custom"` channel from inside `respond`, so the answer can start
+ * painting before that node reports done.
  */
 export type Branch = "file" | "load" | "respond"
 export type RunStep = "route" | "load" | "respond"

@@ -280,3 +280,81 @@ describe('the fallback chain', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('streamText', () => {
+  const sse = (events: string[]) =>
+    new Response(events.join(''), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    })
+
+  const textStream = (...chunks: string[]) => {
+    const events = [
+      'event: interaction.created\ndata: {"event_type":"interaction.created"}\n\n',
+      'event: step.start\ndata: {"step":{"type":"thought"},"event_type":"step.start"}\n\n',
+      'event: step.delta\ndata: {"delta":{"type":"thought_signature","signature":"x"},"event_type":"step.delta"}\n\n',
+      'event: step.stop\ndata: {"event_type":"step.stop"}\n\n',
+      'event: step.start\ndata: {"step":{"type":"model_output"},"event_type":"step.start"}\n\n',
+      ...chunks.map(
+        (text) =>
+          `event: step.delta\ndata: ${JSON.stringify({ delta: { type: 'text', text }, event_type: 'step.delta' })}\n\n`,
+      ),
+      'event: step.stop\ndata: {"event_type":"step.stop"}\n\n',
+      'event: interaction.completed\ndata: {"interaction":{"status":"completed"},"event_type":"interaction.completed"}\n\n',
+    ]
+    return sse(events)
+  }
+
+  it('forwards model_output text deltas and ignores thought', async () => {
+    fetchMock.mockResolvedValue(textStream('Xin ', 'chào'))
+    const deltas: string[] = []
+
+    const result = await gemini.streamText(
+      { systemInstruction: 'answer', turns: [{ role: 'user', text: 'hi' }] },
+      (delta) => deltas.push(delta),
+    )
+
+    expect(deltas).toEqual(['Xin ', 'chào'])
+    expect(result).toEqual({ text: 'Xin chào', model: 'model-a' })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse')
+    expect(JSON.parse(String(init.body)).stream).toBe(true)
+  })
+
+  it('does not rotate after tokens have already been sent', async () => {
+    fetchMock.mockImplementation(
+      () =>
+        new Response(
+          [
+            'event: step.start\ndata: {"step":{"type":"model_output"}}\n\n',
+            'event: step.delta\ndata: {"delta":{"type":"text","text":"half"}}\n\n',
+            // Stream dies before interaction.completed — committed, no retry.
+          ].join(''),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        ),
+    )
+
+    await expect(
+      gemini.streamText({ systemInstruction: 'answer', turns: [{ role: 'user', text: 'hi' }] }),
+    ).rejects.toThrow(/stream already committed|ended early/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rotates when the first model answers with no text', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        sse([
+          'event: step.start\ndata: {"step":{"type":"thought"}}\n\n',
+          'event: step.stop\ndata: {}\n\n',
+          'event: interaction.completed\ndata: {"interaction":{"status":"completed"}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(textStream('ok'))
+
+    await expect(
+      gemini.streamText({ systemInstruction: 'answer', turns: [{ role: 'user', text: 'hi' }] }),
+    ).resolves.toEqual({ text: 'ok', model: 'model-b' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})

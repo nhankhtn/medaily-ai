@@ -76,7 +76,9 @@ export const chat = new Hono()
    *
    * The reading arrives long before the answer does, which is the point: a
    * question taken the wrong way is worth seeing while rephrasing is still
-   * cheaper than reading a wrong answer.
+   * cheaper than reading a wrong answer. Token deltas from `respond` ride the
+   * same stream as `custom` events, so the panel can paint the answer as it is
+   * written rather than waiting for the node to finish.
    */
   .post("/live", async (c) => {
     const parsed = chatSchema.safeParse(await c.req.json().catch(() => null))
@@ -91,13 +93,23 @@ export const chat = new Hono()
       try {
         const updates = await graph().stream(
           { input: parsed.data.message, userId, today: anchor },
-          { configurable: { thread_id: threadId }, streamMode: "updates" },
+          { configurable: { thread_id: threadId }, streamMode: ["updates", "custom"] },
         )
 
         let decision: Decision | undefined
 
-        for await (const update of updates) {
-          for (const [node, patch] of Object.entries(update as Record<string, Patch>)) {
+        for await (const chunk of updates) {
+          // Multiple modes arrive as `[mode, payload]`; a lone mode would not,
+          // but this route always asks for both.
+          const [mode, payload] = chunk as ["updates" | "custom", unknown]
+
+          if (mode === "custom") {
+            const delta = (payload as { delta?: string } | null)?.delta
+            if (delta) await send("delta", { text: delta })
+            continue
+          }
+
+          for (const [node, patch] of Object.entries(payload as Record<string, Patch>)) {
             if (patch?.decision) {
               decision = patch.decision
               if (decision.reason) await send("reason", { reason: decision.reason })

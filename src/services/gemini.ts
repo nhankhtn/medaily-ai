@@ -179,6 +179,34 @@ export async function generateText(
   }))
 }
 
+/**
+ * Same chain as `generateText`, but each `model_output` text delta is handed to
+ * `onDelta` as it arrives — so a panel can paint the answer while it is still
+ * being written.
+ *
+ * Once any character has been emitted, a refusal cannot rotate to another
+ * model: the panel already has half an answer from this one, and starting over
+ * on a second model would append a second beginning onto the first.
+ */
+export async function streamText(
+  request: GenerateTextInput,
+  onDelta?: (text: string) => void,
+): Promise<{ text: string; model: string }> {
+  return attemptEach("text", async (model, key) => {
+    let emitted = 0
+    try {
+      const text = await requestTextStream(model, key, request, (delta) => {
+        emitted += delta.length
+        onDelta?.(delta)
+      })
+      return { text, model }
+    } catch (error) {
+      if (emitted > 0) throw new StreamCommittedError(error, model)
+      throw error
+    }
+  })
+}
+
 export async function generateJson<T>(
   request: GenerateJsonInput,
 ): Promise<{ value: T; model: string }> {
@@ -186,6 +214,21 @@ export async function generateJson<T>(
     value: await requestJson<T>(model, key, request),
     model,
   }))
+}
+
+/**
+ * Tokens already reached the caller. Retried on another model, they would see
+ * two openings of one answer — so the chain stops here, with the original cause.
+ */
+export class StreamCommittedError extends GeminiError {
+  readonly committedCause: unknown
+
+  constructor(cause: unknown, model: string) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    super(`stream already committed: ${detail}`, null, model)
+    this.name = "StreamCommittedError"
+    this.committedCause = cause
+  }
 }
 
 /**
@@ -283,6 +326,9 @@ async function attemptEach<T>(
       return await attempt(model, key)
     } catch (error) {
       lastError = error
+
+      // Half an answer is already on the wire. Another model cannot un-send it.
+      if (error instanceof StreamCommittedError) throw error
 
       const step = nextStep(error)
       if (step === "stop") throw error
@@ -394,30 +440,161 @@ async function requestJson<T>(
  * is the type the API returns and the only one it accepts back; `model_response`,
  * which the docs show, is rejected.
  */
+function textPayload({ systemInstruction, turns }: GenerateTextInput): Record<string, unknown> {
+  return {
+    input: turns.map((turn) => ({
+      type: turn.role === "user" ? "user_input" : "model_output",
+      content: [{ type: "text", text: turn.text }],
+    })),
+    system_instruction: systemInstruction,
+    // Prose over numbers, not extraction: it needs room to weigh them, and a
+    // little spread stops every week reading like the same paragraph.
+    generation_config: { temperature: 0.3, thinking_level: "medium" },
+  }
+}
+
 async function requestText(
   model: string,
   key: string,
-  { systemInstruction, turns }: GenerateTextInput,
+  request: GenerateTextInput,
 ): Promise<string> {
-  const body = await post(
-    model,
-    key,
-    {
-      input: turns.map((turn) => ({
-        type: turn.role === "user" ? "user_input" : "model_output",
-        content: [{ type: "text", text: turn.text }],
-      })),
-      system_instruction: systemInstruction,
-      // Prose over numbers, not extraction: it needs room to weigh them, and a
-      // little spread stops every week reading like the same paragraph.
-      generation_config: { temperature: 0.3, thinking_level: "medium" },
-    },
-    TIMEOUT_MS.text,
-  )
+  const body = await post(model, key, textPayload(request), TIMEOUT_MS.text)
 
   const text = outputTextOf(body)
   if (!text) throw new EmptyAnswerError("gemini returned no text", model)
   return text
+}
+
+/**
+ * `?alt=sse` plus `stream: true`: the same interaction as `requestText`, but
+ * each `step.delta` of a `model_output` step is forwarded as it lands. Thought
+ * deltas are ignored — reasoning belongs in the log, not on the person's screen.
+ */
+async function requestTextStream(
+  model: string,
+  key: string,
+  request: GenerateTextInput,
+  onDelta: (text: string) => void,
+): Promise<string> {
+  const response = await fetch(`${ENDPOINT}?alt=sse`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "x-goog-api-key": key,
+      "Api-Revision": API_REVISION,
+    },
+    signal: AbortSignal.timeout(TIMEOUT_MS.text),
+    body: JSON.stringify({ model, store: false, stream: true, ...textPayload(request) }),
+  })
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as InteractionResponse | null
+    throw new GeminiError(
+      `gemini responded ${response.status}: ${body?.error?.message ?? "no detail"}`,
+      response.status,
+      model,
+      retryAfterMs(response),
+    )
+  }
+  if (!response.body) throw new GeminiError("gemini returned no body", null, model)
+
+  let text = ""
+  let stepType: string | null = null
+  let completed = false
+
+  for await (const event of readSse(response.body)) {
+    let data: Record<string, unknown>
+    try {
+      data = JSON.parse(event.data) as Record<string, unknown>
+    } catch {
+      throw new GeminiError("gemini streamed a line that is not JSON", null, model)
+    }
+
+    const type = event.event || (typeof data.event_type === "string" ? data.event_type : "")
+
+    if (type === "step.start") {
+      const step = data.step as { type?: string } | undefined
+      stepType = step?.type ?? null
+      continue
+    }
+
+    if (type === "step.delta") {
+      const delta = data.delta as { type?: string; text?: string } | undefined
+      if (stepType === "model_output" && delta?.type === "text" && delta.text) {
+        text += delta.text
+        onDelta(delta.text)
+      }
+      continue
+    }
+
+    if (type === "step.stop") {
+      stepType = null
+      continue
+    }
+
+    if (type === "interaction.completed") {
+      completed = true
+      const interaction = data.interaction as { status?: string } | undefined
+      if (interaction?.status && interaction.status !== "completed") {
+        throw new GeminiError(`gemini did not complete: ${interaction.status}`, null, model)
+      }
+      continue
+    }
+
+    if (type === "error" || type === "interaction.failed") {
+      const err = data.error as { message?: string } | undefined
+      throw new GeminiError(
+        `gemini stream failed: ${err?.message ?? "no detail"}`,
+        null,
+        model,
+      )
+    }
+  }
+
+  if (!completed) throw new GeminiError("gemini stream ended early", null, model)
+  if (!text) throw new EmptyAnswerError("gemini returned no text", model)
+  return text
+}
+
+type SseEvent = { event: string; data: string }
+
+/** Same shape as the frontend reader: named events, blank-line framed. */
+async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      let end = buffer.indexOf("\n\n")
+      while (end !== -1) {
+        const block = parseSseBlock(buffer.slice(0, end))
+        buffer = buffer.slice(end + 2)
+        if (block) yield block
+        end = buffer.indexOf("\n\n")
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+}
+
+function parseSseBlock(block: string): SseEvent | null {
+  let event = "message"
+  const data: string[] = []
+
+  for (const line of block.split("\n")) {
+    const clean = line.replace(/\r$/, "")
+    if (clean.startsWith("event:")) event = clean.slice(6).trim()
+    else if (clean.startsWith("data:")) data.push(clean.slice(5).replace(/^ /, ""))
+  }
+
+  return data.length > 0 ? { event, data: data.join("\n") } : null
 }
 
 /**
