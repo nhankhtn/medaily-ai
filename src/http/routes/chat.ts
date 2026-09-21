@@ -99,15 +99,19 @@ export const chat = new Hono()
         let decision: Decision | undefined
 
         for await (const chunk of updates) {
-          // Multiple modes arrive as `[mode, payload]`; a lone mode would not,
-          // but this route always asks for both.
-          const [mode, payload] = chunk as ["updates" | "custom", unknown]
+          // Multiple modes arrive as `[mode, payload]`. With a namespace they
+          // are `[ns, mode, payload]` — unwrap either shape.
+          const parts = chunk as unknown[]
+          const mode = (parts.length >= 3 ? parts[1] : parts[0]) as "updates" | "custom"
+          const payload = parts.length >= 3 ? parts[2] : parts[1]
 
           if (mode === "custom") {
             const delta = (payload as { delta?: string } | null)?.delta
             if (delta) await send("delta", { text: delta })
             continue
           }
+
+          if (mode !== "updates" || !payload || typeof payload !== "object") continue
 
           for (const [node, patch] of Object.entries(payload as Record<string, Patch>)) {
             if (patch?.decision) {

@@ -1,4 +1,4 @@
-import { writer } from "@langchain/langgraph"
+import { getWriter, type LangGraphRunnableConfig } from "@langchain/langgraph"
 import { streamText, type Turn } from "../../gemini.js"
 import { liveTurns } from "../../../lib/session.js"
 import type { AgentStateType } from "../state.js"
@@ -67,7 +67,10 @@ ${VOICE}
  */
 const REPLAYED_TURNS = 12
 
-export async function respond(state: AgentStateType): Promise<Partial<AgentStateType>> {
+export async function respond(
+  state: AgentStateType,
+  config: LangGraphRunnableConfig,
+): Promise<Partial<AgentStateType>> {
   const help = state.decision?.intent === "help"
 
   const context = state.context
@@ -89,14 +92,20 @@ export async function respond(state: AgentStateType): Promise<Partial<AgentState
     { role: "user", text: `${state.input}${reason}${context}` },
   ]
 
+  /*
+   * `writer()` from the package reads `configurable.writer`, which is never
+   * set — LangGraph hangs the stream sink on `config.writer`. `getWriter`
+   * checks both; without it every delta was a silent no-op and the panel only
+   * saw the finished `answer` event.
+   */
+  const write = getWriter(config)
+
   const { text, model } = await streamText(
     {
       systemInstruction: help ? HELP_PROMPT : DATA_PROMPT,
       turns,
     },
-    // Custom stream: each delta reaches `/live` while this node is still open.
-    // Absent (plain `invoke`), the writer is a no-op and the answer arrives whole.
-    (delta) => writer({ delta }),
+    (delta) => write?.({ delta }),
   )
 
   return {
