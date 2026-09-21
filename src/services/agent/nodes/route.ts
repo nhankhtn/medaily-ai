@@ -23,14 +23,15 @@ When a message could honestly be read both ways, choose "none". An answer they d
 When "filing" is not "none", the intent and the period do not matter — send "review" and "recent" and say in the reason what you are filing.
 
 Pick exactly one "intent":
-- "review" — how a stretch of time went. "tuần này thế nào", "tổng kết tháng", "tôi ngủ đủ chưa", "nhìn lại tuần rồi". Anything that weighs logged numbers over a period.
+- "review" — how a stretch of time went overall: energy, sleep, study, habits. "tuần này thế nào", "tổng kết tháng", "tôi ngủ đủ chưa", "nhìn lại tuần rồi". Not money.
 - "plan" — goals and things to do. "tuần tới làm gì", "mục tiêu của tôi đến đâu rồi", "còn việc gì chưa xong", "lên kế hoạch ôn thi".
-- "finance" — money in or out. "tháng này tiêu bao nhiêu", "tiền ăn uống", "tôi có tiêu quá tay không".
-- "daily" — one day, usually today or yesterday. "hôm nay tôi ghi gì", "hôm qua ngủ mấy tiếng".
+- "finance" — money in or out, including comparisons and day-by-day spend. "tháng này tiêu bao nhiêu", "tiền ăn uống", "tôi có tiêu quá tay không", "so sánh chi tiêu tuần này với tuần trước", "chi tiêu các ngày trong tuần". If they say chi tiêu / tiêu / tiền / spending / expense, this wins over "review" even when they also name a week or ask to so sánh.
+- "daily" — one day, usually today or yesterday, about the daily log (not money). "hôm nay tôi ghi gì", "hôm qua ngủ mấy tiếng".
 - "help" — how to use the app. Where a thing is, how to do it, what a page or a setting means, whether the app can do something at all. "làm sao để ghi khoản chi", "thêm thói quen ở đâu", "điểm số tính kiểu gì", "app có xuất dữ liệu được không", "hướng dẫn dùng app".
 - "smalltalk" — a greeting, a thank-you, or anything that needs no data and no instructions at all.
 
 The line between "help" and the rest is what they are asking for, not the words: "làm sao để" and "ở đâu" want instructions, "tôi đã" and "bao nhiêu" want their own numbers. "tôi tiêu bao nhiêu tháng này" is "finance"; "ghi khoản chi ở đâu" is "help". When someone asks both at once, answer the instructions — the numbers are one more question away.
+The line between "review" and "finance" is the subject: sleep/energy/habits → review; chi tiêu/tiền/spending → finance. "so sánh chi tiêu các ngày trong tuần trước" is "finance", not "review".
 
 Pick one "period", which says how far back to look:
 - "week" — this week, or when they say tuần / week.
@@ -99,5 +100,27 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
     reason: typeof value.reason === "string" ? value.reason.slice(0, 300) : "",
   }
 
+  /*
+   * Money words beat a review mis-route. "so sánh chi tiêu các ngày…" kept
+   * landing on review, which loads daily-log aggregates and never opens the
+   * transactions table — so the answer said "không có dữ liệu" while spend
+   * rows were sitting there.
+   */
+  if (decision.filing === "none" && decision.intent !== "finance" && looksLikeFinance(state.input)) {
+    decision.intent = "finance"
+  }
+
   return { decision, models: [`route:${model}`] }
+}
+
+/** Chi tiêu / tiền / spending — the subject is money, not the daily log. */
+function looksLikeFinance(message: string): boolean {
+  const folded = message
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+  return /chi tieu|\btieu\b|spending|expense|income|\btien\b|luong|ngan sach|budget/.test(
+    folded,
+  )
 }

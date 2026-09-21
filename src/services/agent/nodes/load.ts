@@ -1,6 +1,6 @@
 import { precedingWindow, resolveWindow } from "../../../lib/period.js"
 import { aggregateDailyLogs, listDailyLogs } from "../../../repositories/daily.js"
-import { spendByCategory } from "../../../repositories/finance.js"
+import { spendByCategory, spendByDay } from "../../../repositories/finance.js"
 import { listGoals } from "../../../repositories/goals.js"
 import { listTasks } from "../../../repositories/tasks.js"
 import { GUIDE } from "../guide.js"
@@ -60,23 +60,32 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
 
   if (decision.intent === "finance") {
     const before = precedingWindow(range)
-    const [spend, income, previousSpend, previousIncome] = await Promise.all([
+    const [spend, income, byDay, previousSpend, previousIncome, previousByDay] = await Promise.all([
       spendByCategory({ userId, from: range.start, to: range.end, kind: "expense" }),
       spendByCategory({ userId, from: range.start, to: range.end, kind: "income" }),
+      spendByDay({ userId, from: range.start, to: range.end, kind: "expense" }),
       spendByCategory({ userId, from: before.start, to: before.end, kind: "expense" }),
       spendByCategory({ userId, from: before.start, to: before.end, kind: "income" }),
+      spendByDay({ userId, from: before.start, to: before.end, kind: "expense" }),
     ])
     /*
      * Same shape as review: the earlier stretch keeps its own dates inside
      * `comparedWith`, so "so sánh với tuần trước" has numbers on both sides
-     * and cannot invent the missing week.
+     * and cannot invent the missing week. `byDay` is what "các ngày" needs —
+     * category totals alone cannot name which day was heavy.
      */
     return {
       context: {
         range,
         spend,
         income,
-        comparedWith: { range: before, spend: previousSpend, income: previousIncome },
+        byDay,
+        comparedWith: {
+          range: before,
+          spend: previousSpend,
+          income: previousIncome,
+          byDay: previousByDay,
+        },
       },
     }
   }
