@@ -32,18 +32,23 @@ function fold(value: string): string {
 }
 
 /*
- * Longest first: "tuan truoc nua" must not be eaten by "tuan truoc".
+ * Longest / most specific first. "tuan truoc nua" must not be eaten by
+ * "tuan truoc". Current ("nay") is checked before previous ("truoc"): a
+ * comparison like "tuần này với tuần trước" names both, and the primary window
+ * must be the one being asked about — this week — with last week loaded as
+ * comparison by the caller. Matching "truoc" first used to answer last week
+ * alone and leave the person with nothing to so sánh against.
  */
 const WEEK_OFFSETS: [RegExp, number][] = [
   [/tuan truoc nua|tuan kia|two weeks ago/, -2],
-  [/tuan (truoc|roi|qua)|last week/, -1],
   [/tuan (nay|hien tai)|this week/, 0],
+  [/tuan (truoc|roi|qua)|last week/, -1],
 ]
 
 const MONTH_OFFSETS: [RegExp, number][] = [
   [/thang truoc nua|two months ago/, -2],
-  [/thang (truoc|roi|qua)|last month/, -1],
   [/thang (nay|hien tai)|this month/, 0],
+  [/thang (truoc|roi|qua)|last month/, -1],
 ]
 
 /** "tháng 9", "tháng 09", "month 9" — a month by number, within the last year. */

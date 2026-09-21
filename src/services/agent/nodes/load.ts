@@ -59,11 +59,26 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
   }
 
   if (decision.intent === "finance") {
-    const [spend, income] = await Promise.all([
+    const before = precedingWindow(range)
+    const [spend, income, previousSpend, previousIncome] = await Promise.all([
       spendByCategory({ userId, from: range.start, to: range.end, kind: "expense" }),
       spendByCategory({ userId, from: range.start, to: range.end, kind: "income" }),
+      spendByCategory({ userId, from: before.start, to: before.end, kind: "expense" }),
+      spendByCategory({ userId, from: before.start, to: before.end, kind: "income" }),
     ])
-    return { context: { range, spend, income } }
+    /*
+     * Same shape as review: the earlier stretch keeps its own dates inside
+     * `comparedWith`, so "so sánh với tuần trước" has numbers on both sides
+     * and cannot invent the missing week.
+     */
+    return {
+      context: {
+        range,
+        spend,
+        income,
+        comparedWith: { range: before, spend: previousSpend, income: previousIncome },
+      },
+    }
   }
 
   // daily — the raw rows, because the question is about a specific day.

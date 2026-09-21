@@ -41,6 +41,15 @@ describe("the stretch a message is about", () => {
     expect(window("tháng trước nữa")).toBe("month 2026-07-01..2026-07-31")
   })
 
+  it("picks this week when a comparison names both this and last", () => {
+    // "truoc" used to win because it was listed first; the primary window must
+    // be the one being asked about so load can attach last week as comparedWith.
+    expect(window("So sánh chi tiêu tuần này với tuần trước")).toBe(
+      "week 2026-09-14..2026-09-20",
+    )
+    expect(window("tháng này so với tháng trước")).toBe("month 2026-09-01..2026-09-30")
+  })
+
   it("falls back to the router when no stretch is named", () => {
     expect(window("tôi đang đi đúng hướng chứ", "week")).toBe("week 2026-09-14..2026-09-20")
     expect(window("tôi tiêu nhiều quá không", "month")).toBe("month 2026-09-01..2026-09-30")
