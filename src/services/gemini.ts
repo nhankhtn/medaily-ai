@@ -504,24 +504,42 @@ async function requestTextStream(
   let completed = false
 
   for await (const event of readSse(response.body)) {
+    // Empty / non-JSON frames are transport keepalives (Vercel, gateways, the
+    // API itself). Throwing on them aborted mid-answer once tokens had already
+    // reached the panel — StreamCommittedError, no retry, a broken chat.
+    if (!event.data.trim()) continue
+
     let data: Record<string, unknown>
     try {
       data = JSON.parse(event.data) as Record<string, unknown>
     } catch {
-      throw new GeminiError("gemini streamed a line that is not JSON", null, model)
+      log.debug("gemini", `skipping non-JSON sse frame (${event.event || "message"})`)
+      continue
     }
 
     const type = event.event || (typeof data.event_type === "string" ? data.event_type : "")
 
     if (type === "step.start") {
-      const step = data.step as { type?: string } | undefined
+      const step = data.step as
+        | { type?: string; content?: { type?: string; text?: string }[] }
+        | undefined
       stepType = step?.type ?? null
+      // Some revisions put the first characters on start rather than a delta.
+      if (stepType === "model_output") {
+        for (const block of step?.content ?? []) {
+          if (block.type === "text" && block.text) {
+            text += block.text
+            onDelta(block.text)
+          }
+        }
+      }
       continue
     }
 
     if (type === "step.delta") {
       const delta = data.delta as { type?: string; text?: string } | undefined
-      if (stepType === "model_output" && delta?.type === "text" && delta.text) {
+      // `type: "text"` is enough: thought steps send signatures, not prose.
+      if (delta?.type === "text" && delta.text) {
         text += delta.text
         onDelta(delta.text)
       }
@@ -559,7 +577,12 @@ async function requestTextStream(
 
 type SseEvent = { event: string; data: string }
 
-/** Same shape as the frontend reader: named events, blank-line framed. */
+/**
+ * Named events, blank-line framed. Accepts both LF and CRLF separators — the
+ * Interactions API documents `\n\n`, but proxies on the way in often speak
+ * `\r\n\r\n`, and mixing the two used to leave real frames stuck in the buffer
+ * while a lone LF keepalive was the only thing that parsed.
+ */
 async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
@@ -571,16 +594,36 @@ async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEve
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      let end = buffer.indexOf("\n\n")
-      while (end !== -1) {
-        const block = parseSseBlock(buffer.slice(0, end))
-        buffer = buffer.slice(end + 2)
-        if (block) yield block
-        end = buffer.indexOf("\n\n")
+      for (;;) {
+        const split = takeSseFrame(buffer)
+        if (!split) break
+        buffer = split.rest
+        if (split.event) yield split.event
       }
     }
+
+    // A final frame with no trailing blank line still counts.
+    buffer += decoder.decode()
+    const trailing = parseSseBlock(buffer)
+    if (trailing) yield trailing
   } finally {
     await reader.cancel().catch(() => {})
+  }
+}
+
+function takeSseFrame(
+  buffer: string,
+): { event: SseEvent | null; rest: string } | null {
+  const lf = buffer.indexOf("\n\n")
+  const crlf = buffer.indexOf("\r\n\r\n")
+  if (lf === -1 && crlf === -1) return null
+
+  const useCrlf = crlf !== -1 && (lf === -1 || crlf < lf)
+  const at = useCrlf ? crlf : lf
+  const width = useCrlf ? 4 : 2
+  return {
+    event: parseSseBlock(buffer.slice(0, at)),
+    rest: buffer.slice(at + width),
   }
 }
 
@@ -588,13 +631,17 @@ function parseSseBlock(block: string): SseEvent | null {
   let event = "message"
   const data: string[] = []
 
-  for (const line of block.split("\n")) {
-    const clean = line.replace(/\r$/, "")
-    if (clean.startsWith("event:")) event = clean.slice(6).trim()
-    else if (clean.startsWith("data:")) data.push(clean.slice(5).replace(/^ /, ""))
+  for (const line of block.split(/\r?\n/)) {
+    if (!line || line.startsWith(":")) continue
+    if (line.startsWith("event:")) event = line.slice(6).trim()
+    else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""))
   }
 
-  return data.length > 0 ? { event, data: data.join("\n") } : null
+  if (data.length === 0) return null
+  const joined = data.join("\n")
+  // `data:` with nothing after it is a heartbeat, not an event.
+  if (!joined.trim()) return null
+  return { event, data: joined }
 }
 
 /**

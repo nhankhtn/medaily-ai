@@ -357,4 +357,39 @@ describe('streamText', () => {
     ).resolves.toEqual({ text: 'ok', model: 'model-b' })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('skips keepalives and still completes the answer', async () => {
+    fetchMock.mockResolvedValue(
+      sse([
+        'event: step.start\ndata: {"step":{"type":"model_output"}}\n\n',
+        // Empty data + comment + non-JSON — the frames that used to abort mid-stream.
+        'data: \n\n',
+        ': ping\n\n',
+        'data: not-json\n\n',
+        'event: step.delta\ndata: {"delta":{"type":"text","text":"hi"}}\n\n',
+        'event: interaction.completed\ndata: {"interaction":{"status":"completed"}}\n\n',
+      ]),
+    )
+
+    await expect(
+      gemini.streamText({ systemInstruction: 'answer', turns: [{ role: 'user', text: 'hi' }] }),
+    ).resolves.toEqual({ text: 'hi', model: 'model-a' })
+  })
+
+  it('reads CRLF-framed events the same way', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        [
+          'event: step.start\r\ndata: {"step":{"type":"model_output"}}\r\n\r\n',
+          'event: step.delta\r\ndata: {"delta":{"type":"text","text":"ok"}}\r\n\r\n',
+          'event: interaction.completed\r\ndata: {"interaction":{"status":"completed"}}\r\n\r\n',
+        ].join(''),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } },
+      ),
+    )
+
+    await expect(
+      gemini.streamText({ systemInstruction: 'answer', turns: [{ role: 'user', text: 'hi' }] }),
+    ).resolves.toEqual({ text: 'ok', model: 'model-a' })
+  })
 })
