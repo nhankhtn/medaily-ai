@@ -19,18 +19,6 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions"
 const API_REVISION = "2026-05-20"
 
 /**
- * Tried in order, first one that answers wins. Quota on this API is counted per
- * model, so a project out of its free bucket on one flash model still has the
- * others. Cheapest first, then a step up.
- */
-export const DEFAULT_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.7-flash",
-] as const
-
-/**
  * Per attempt, not for the chain — a slow model must not eat the next one's
  * budget. Routing runs while someone waits and should give up quickly; an
  * answer reasons over a page of numbers and routinely needs longer.
@@ -47,8 +35,13 @@ type Kind = keyof typeof TIMEOUT_MS
  */
 const BUDGET_MS = { json: 40_000, text: 120_000 } as const
 
+/**
+ * A key and something to spend it on. Without a model there is no chain and
+ * every question fails the same way, so `/health` should say so once rather
+ * than every request saying it again.
+ */
 export function geminiEnabled(): boolean {
-  return geminiKeys().length > 0
+  return geminiKeys().length > 0 && geminiModels().length > 0
 }
 
 function parseList(value: string | undefined): string[] {
@@ -59,17 +52,26 @@ function parseList(value: string | undefined): string[] {
 }
 
 /**
- * `GEMINI_MODELS` replaces the chain outright. `GEMINI_MODEL` names a first
- * choice and keeps the defaults behind it, so pinning one model does not also
- * throw away the fallbacks.
+ * The chain, in the order it is tried, and nothing this file adds to it.
+ *
+ * `GEMINI_MODELS` is a comma-separated chain; `GEMINI_MODEL` is the same thing
+ * with one entry, kept because a deploy that only ever wanted one model should
+ * not have to learn the plural. Set both and the list wins.
+ *
+ * There is deliberately no built-in chain behind either. A model id names a
+ * tier, a price and a quota bucket, and one shipped here in a release months
+ * ago is a decision nobody made on purpose — when the configured model starts
+ * refusing, what runs instead has to be somebody's choice.
+ *
+ * Quota is counted per model, so more than one entry is still worth having:
+ * a project out of its free bucket on the cheap model still has the others.
  */
 export function resolveModels(models?: string, model?: string): string[] {
   const configured = parseList(models)
   if (configured.length > 0) return configured
 
   const preferred = model?.trim()
-  if (!preferred) return [...DEFAULT_MODELS]
-  return [preferred, ...DEFAULT_MODELS.filter((candidate) => candidate !== preferred)]
+  return preferred ? [preferred] : []
 }
 
 export function geminiModels(): string[] {
@@ -124,6 +126,33 @@ export class EmptyAnswerError extends GeminiError {
   }
 }
 
+/**
+ * The request ran out of time.
+ *
+ * `AbortSignal.timeout` rejects with a `TimeoutError`, which is not a
+ * `GeminiError` and used to end the whole run — one slow model took down a
+ * question the second model had the budget to answer. `BUDGET_MS` is twice
+ * `TIMEOUT_MS` for exactly that second attempt.
+ *
+ * Only `TimeoutError`. An `AbortError` is someone else hanging up, and asking
+ * a different model on their behalf helps nobody.
+ */
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError"
+}
+
+/** What Google asked us to wait, when it said. A timeout carries nothing. */
+function retryAfterOf(error: unknown): number | null {
+  return error instanceof GeminiError ? error.retryAfterMs : null
+}
+
+/** For the log line: a status when there is one, and why when there is not. */
+function describe(error: unknown): string {
+  if (isTimeout(error)) return "timed out"
+  if (error instanceof EmptyAnswerError) return "no text"
+  return String((error as GeminiError).status)
+}
+
 type Step = "key" | "model" | "stop"
 
 /**
@@ -133,12 +162,14 @@ type Step = "key" | "model" | "stop"
  * another key still has its own, and rotating to it keeps the cheap model. 503
  * is that model overloaded on Google's side and 404 is that model not existing
  * for this project; neither is about the key, so the next thing to change is
- * the model. An answer with nothing in it is the same kind of problem as an
- * overloaded model: this one will not do it, another might. Anything else is
- * about the request itself, and repeating it elsewhere only spends the budget.
+ * the model. An answer with nothing in it, and an answer that never arrived,
+ * are the same kind of problem as an overloaded model: this one will not do
+ * it, another might. Anything else is about the request itself, and repeating
+ * it elsewhere only spends the budget.
  */
 function nextStep(error: unknown): Step {
   if (error instanceof EmptyAnswerError) return "model"
+  if (isTimeout(error)) return "model"
   if (!(error instanceof GeminiError)) return "stop"
   if (error.status === 429) return "key"
   if (error.status === 404 || error.status === 503) return "model"
@@ -245,15 +276,31 @@ export class StreamCommittedError extends GeminiError {
  */
 const cooling = new Map<string, number>()
 const COOLDOWN_MS = 60_000
+/**
+ * Shorter than a quota cooldown, and deliberately. Quota comes back on a clock
+ * and a minute is a fair guess at it; a model refusing or hanging is weather,
+ * and shutting the cheap model out for a minute over one bad request costs
+ * more than the request did.
+ */
+const MODEL_COOLDOWN_MS = 30_000
 const MAX_COOLDOWN_MS = 15 * 60_000
 
-/** A key is base64url and a model id is lowercase and dashed; neither holds a pipe. */
+/**
+ * Two kinds of bucket, because there are two kinds of bad news.
+ *
+ * A 429 belongs to the key: the same model on another key still has its own
+ * allowance, so only that pair is cooled. A 503, a 404 and a timeout belong to
+ * the model: Google is not going to be less overloaded for a different key, so
+ * the whole row goes. `*` marks the second kind — a key is base64url and a
+ * model id is lowercase and dashed, so neither holds a pipe or a star.
+ */
 function bucketOf(key: string, model: string): string {
   return `${key}|${model}`
 }
 
-function isCooling(key: string, model: string, now: number): boolean {
-  const bucket = bucketOf(key, model)
+const ANY_KEY = "*"
+
+function cooledUntil(bucket: string, now: number): boolean {
   const until = cooling.get(bucket)
   if (until === undefined) return false
   if (until > now) return true
@@ -262,8 +309,27 @@ function isCooling(key: string, model: string, now: number): boolean {
   return false
 }
 
+function isCooling(key: string, model: string, now: number): boolean {
+  return cooledUntil(bucketOf(ANY_KEY, model), now) || cooledUntil(bucketOf(key, model), now)
+}
+
+/** Quota, which belongs to one key on one model. */
 function cool(key: string, model: string, now: number, retryAfterMs: number | null): void {
   cooling.set(bucketOf(key, model), now + (retryAfterMs ?? COOLDOWN_MS))
+}
+
+/**
+ * The model itself, for every key.
+ *
+ * Without this the next question walks straight back into the same wall: one
+ * afternoon three questions in a row each spent twenty seconds on a model the
+ * question before it had already found dead.
+ */
+function coolModel(model: string, now: number, retryAfterMs: number | null): void {
+  cooling.set(
+    bucketOf(ANY_KEY, model),
+    now + Math.min(retryAfterMs ?? MODEL_COOLDOWN_MS, MAX_COOLDOWN_MS),
+  )
 }
 
 /**
@@ -334,10 +400,8 @@ async function attemptEach<T>(
       if (step === "stop") throw error
       if (step === "model") {
         exhaustedModel = model
-        log.warn(
-          "gemini",
-          `${model} unavailable (${(error as GeminiError).status}), trying the next model`,
-        )
+        coolModel(model, Date.now(), retryAfterOf(error))
+        log.warn("gemini", `${model} unavailable (${describe(error)}), trying the next model`)
         continue
       }
 
@@ -521,8 +585,7 @@ async function requestTextStream(
 
     if (type === "step.start") {
       const step = data.step as
-        | { type?: string; content?: { type?: string; text?: string }[] }
-        | undefined
+        { type?: string; content?: { type?: string; text?: string }[] } | undefined
       stepType = step?.type ?? null
       // Some revisions put the first characters on start rather than a delta.
       if (stepType === "model_output") {
@@ -562,11 +625,7 @@ async function requestTextStream(
 
     if (type === "error" || type === "interaction.failed") {
       const err = data.error as { message?: string } | undefined
-      throw new GeminiError(
-        `gemini stream failed: ${err?.message ?? "no detail"}`,
-        null,
-        model,
-      )
+      throw new GeminiError(`gemini stream failed: ${err?.message ?? "no detail"}`, null, model)
     }
   }
 
@@ -611,9 +670,7 @@ async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEve
   }
 }
 
-function takeSseFrame(
-  buffer: string,
-): { event: SseEvent | null; rest: string } | null {
+function takeSseFrame(buffer: string): { event: SseEvent | null; rest: string } | null {
   const lf = buffer.indexOf("\n\n")
   const crlf = buffer.indexOf("\r\n\r\n")
   if (lf === -1 && crlf === -1) return null

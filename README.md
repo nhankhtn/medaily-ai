@@ -5,8 +5,9 @@ about, fetches only the numbers that question needs, and answers from them.
 
 Separate from `medaily-frontend` so it deploys and scales on its own. It shares
 the frontend's Neon database (read-only, except for its own checkpoint tables)
-and the frontend's Gemini models — same client, same chain, same API revision,
-so both services answer the same way and fail the same way.
+and it is now the only side that talks to a model at all: the key, the chain
+and every prompt live here, and the frontend sends what it knows about the
+person and renders what comes back.
 
 ## Why it exists
 
@@ -51,15 +52,15 @@ route ──┬── load ── respond ── END
   answer, so a misread question is visible rather than silent.
 
   It also decides whether this is a question at all. `filing` is a second axis,
-  not another intent: `finance` the intent is *asking* about money, `finance`
-  the filing is *telling* us money moved, and "tháng này tiêu 30k" and "tháng
+  not another intent: `finance` the intent is _asking_ about money, `finance`
+  the filing is _telling_ us money moved, and "tháng này tiêu 30k" and "tháng
   này tiêu bao nhiêu" are the same six words apart. A filed note stops the run
   — there is nothing to answer, and the panel opens the form that writes it
   down. On a message that could honestly be read either way the router is told
   to choose the question: an answer nobody wanted costs a sentence, a form
   nobody wanted costs the answer they came for.
 
-  The *dates* are not its to decide. `src/lib/period.ts` reads the stretch out
+  The _dates_ are not its to decide. `src/lib/period.ts` reads the stretch out
   of the message with a regex, and the router's period is only the fallback for
   a question that names none. Asked to do this arithmetic itself, the model
   answered "tháng trước" with this month's numbers — it had no way to say "the
@@ -132,17 +133,19 @@ ESM loader needs instead of leaving it for the build to catch.
 
 ### The routes
 
-| | |
-| --- | --- |
-| `POST /api/chat/live` | the assistant, streamed for a panel (`step` / `reason` / `delta` / `answer`) |
-| `POST /api/chat/stream` | the same run, streamed for whoever is debugging it |
-| `POST /api/chat` | the same run, one JSON answer |
-| `DELETE /api/threads/:id` | end a conversation |
-| `POST /api/capture/finance` | a note read into transactions |
-| `POST /api/capture/plan` | a note read into goals and tasks |
-| `POST /api/review/ask` | a conversation about one period, from context sent in |
-| `POST /api/review/translate` | one answer, rewritten in the other language |
-| `POST /api/report/narrative` | the written review of a period |
+|                              |                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `POST /api/chat/live`        | the assistant, streamed for a panel (`step` / `reason` / `delta` / `answer`) |
+| `POST /api/chat/stream`      | the same run, streamed for whoever is debugging it                           |
+| `POST /api/chat`             | the same run, one JSON answer                                                |
+| `DELETE /api/threads/:id`    | end a conversation                                                           |
+| `POST /api/capture/finance`  | a note read into transactions                                                |
+| `POST /api/capture/plan`     | a note read into goals and tasks                                             |
+| `POST /api/review/ask`       | a conversation about one period, from context sent in                        |
+| `POST /api/review/translate` | one answer, rewritten in the other language                                  |
+| `POST /api/report/narrative` | the written review of a period                                               |
+| `GET /api/models`            | what this key may use, chain first                                           |
+| `GET /api/models/check`      | which of them answers right now                                              |
 
 The capture, review and report routes read no database and hold no state:
 everything about the person arrives in the request, because the app that has it
@@ -209,11 +212,25 @@ the ~250ms round trip to `us-east-2` and tells you nothing about production.
 ## Quota, and more than one key
 
 Quota on the Gemini API is counted per project and per model, so the service
-rotates through both. `GEMINI_API_KEYS` is a comma separated list; it is *added*
+rotates through both. `GEMINI_API_KEYS` is a comma separated list; it is _added_
 to `GEMINI_API_KEY`, so a deploy that already has one key keeps it by setting
 the list rather than losing it.
 
-One question walks a queue of (model, key) pairs — cheapest model first, keys
+`GET /api/models` lists what the key may use and marks the chain inside it;
+`GET /api/models/check` asks each one a one-word question and reports what came
+back. Two questions, because on a bad afternoon the first answers "all of them"
+and the second answers "none" — and only the second one tells you that. It
+defaults to the configured chain, takes `?models=a,b,c` for up to eight, and
+costs one real request per model.
+
+The chain of models is `GEMINI_MODELS`, in order, and nothing else: there is no
+built-in list behind it. A model id names a tier, a price and a quota bucket,
+and one shipped in a release months ago is a choice nobody made — when the
+configured model starts refusing, what runs instead should be somebody's. With
+no model named, `/health` says `not_configured` rather than letting every
+question fail on its own. (`GEMINI_MODEL` is the same setting with one entry.)
+
+One question walks a queue of (model, key) pairs — first model first, keys
 rotated so consecutive questions do not all start on the first one:
 
 - **429** is a bucket being empty, and the bucket belongs to a key. The pair is
@@ -221,6 +238,10 @@ rotated so consecutive questions do not all start on the first one:
   and the next key gets the same cheap model.
 - **503** and **404** are about the model, not the key, so the rest of that
   model's row is skipped and the next model starts.
+- **A timeout** is the same kind of thing — this model is not answering, and
+  another might. It reads as no status at all, which is why it once ended the
+  run outright instead: `BUDGET_MS` is twice `TIMEOUT_MS` for the second
+  attempt that never happened.
 - Anything else is about the request itself and stops the chain immediately —
   rotating a malformed request through five keys only burns five keys.
 
@@ -257,19 +278,19 @@ survives LangGraph's runner and the SSE callback; both are checked.
 
 The same id leaves by three doors: the `x-request-id` response header, the
 `requestId` field on a 500 body and on the SSE `error` event, and the `req …`
-line in the Telegram alert. It is deliberately *not* part of `reportKey` —
+line in the Telegram alert. It is deliberately _not_ part of `reportKey` —
 keyed on it, every failure would be a fresh incident and the rate limit would
 never hold anything back.
 
 `LOG_LEVEL` sets how much of it is written:
 
-| Level | Adds |
-|-------|------|
-| `debug` | one line per model call — which model, whose key |
-| `info` | the access line per request, and the startup line. **The default** |
-| `warn` | rotations away from a key or a model, Telegram refusing a message |
-| `error` | a request that failed, a database that did not answer |
-| `silent` | nothing — to the console. Alerts still go out |
+| Level    | Adds                                                               |
+| -------- | ------------------------------------------------------------------ |
+| `debug`  | one line per model call — which model, whose key                   |
+| `info`   | the access line per request, and the startup line. **The default** |
+| `warn`   | rotations away from a key or a model, Telegram refusing a message  |
+| `error`  | a request that failed, a database that did not answer              |
+| `silent` | nothing — to the console. Alerts still go out                      |
 
 An unreadable value falls back to `info`: a typo in a log setting must not be
 what takes the service down. `/health` reports the level in effect.

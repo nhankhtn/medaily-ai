@@ -6,6 +6,7 @@ import { requestId } from "./middleware/request-id.js"
 import { capture } from "./routes/capture.js"
 import { chat } from "./routes/chat.js"
 import { health } from "./routes/health.js"
+import { models } from "./routes/models.js"
 import { report } from "./routes/report.js"
 import { review } from "./routes/review.js"
 import { threads } from "./routes/threads.js"
@@ -34,6 +35,7 @@ app.route("/health", health)
 const api = new Hono()
 api.route("/capture", capture)
 api.route("/chat", chat)
+api.route("/models", models)
 api.route("/report", report)
 api.route("/review", review)
 api.route("/threads", threads)
