@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { currentRequestId, log } from "../lib/log.js"
 import { environmentName, errorParts, reportError } from "../services/alerts.js"
+import { rateLimit } from "./middleware/rate-limit.js"
 import { requestId } from "./middleware/request-id.js"
 import { capture } from "./routes/capture.js"
 import { chat } from "./routes/chat.js"
@@ -33,6 +34,16 @@ app.use("*", cors())
 app.route("/health", health)
 
 const api = new Hono()
+/*
+ * Ahead of the routes, so it runs before each one's own `requireToken` — a
+ * wrong token is counted too, but it is counted against itself: the bucket is
+ * keyed on the token presented, so a stranger burns their own and not the
+ * frontend's.
+ *
+ * `/health` stays outside. It is the endpoint you reach for when everything
+ * else is refusing, and it must not be one of the things refusing.
+ */
+api.use("*", rateLimit)
 api.route("/capture", capture)
 api.route("/chat", chat)
 api.route("/models", models)
