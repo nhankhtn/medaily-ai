@@ -27,7 +27,7 @@ Pick exactly one "intent":
 - "plan" — goals and things to do. "tuần tới làm gì", "mục tiêu của tôi đến đâu rồi", "còn việc gì chưa xong", "lên kế hoạch ôn thi".
 - "finance" — money in or out, including comparisons and day-by-day spend. "tháng này tiêu bao nhiêu", "tiền ăn uống", "tôi có tiêu quá tay không", "so sánh chi tiêu tuần này với tuần trước", "chi tiêu các ngày trong tuần". If they say chi tiêu / tiêu / tiền / spending / expense, this wins over "review" even when they also name a week or ask to so sánh.
 - "daily" — one day, usually today or yesterday, about the daily log (not money). "hôm nay tôi ghi gì", "hôm qua ngủ mấy tiếng".
-- "help" — how to use the app. Where a thing is, how to do it, what a page or a setting means, whether the app can do something at all. "làm sao để ghi khoản chi", "thêm thói quen ở đâu", "điểm số tính kiểu gì", "app có xuất dữ liệu được không", "hướng dẫn dùng app".
+- "help" — how to use the app. Where a thing is, how to do it, what a page or a setting means, what a feature is FOR and when anyone would reach for it, and whether the app can do something at all. "làm sao để ghi khoản chi", "thêm thói quen ở đâu", "điểm số tính kiểu gì", "app có xuất dữ liệu được không", "hướng dẫn dùng app", "khối thời gian là gì", "cái này dùng khi nào", "cái này để làm gì", "tôi không hiểu chức năng này", "nên dùng thói quen hay khối thời gian".
 - "smalltalk" — a greeting, a thank-you, or anything that needs no data and no instructions at all.
 
 The line between "help" and the rest is what they are asking for, not the words: "làm sao để" and "ở đâu" want instructions, "tôi đã" and "bao nhiêu" want their own numbers. "tôi tiêu bao nhiêu tháng này" is "finance"; "ghi khoản chi ở đâu" is "help". When someone asks both at once, answer the instructions — the numbers are one more question away.
@@ -106,7 +106,11 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
    * transactions table — so the answer said "không có dữ liệu" while spend
    * rows were sitting there.
    */
-  if (decision.filing === "none" && decision.intent !== "finance" && looksLikeFinance(state.input)) {
+  if (
+    decision.filing === "none" &&
+    decision.intent !== "finance" &&
+    looksLikeFinance(state.input)
+  ) {
     decision.intent = "finance"
   }
 
@@ -115,12 +119,6 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
 
 /** Chi tiêu / tiền / spending — the subject is money, not the daily log. */
 function looksLikeFinance(message: string): boolean {
-  const folded = message
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-  return /chi tieu|\btieu\b|spending|expense|income|\btien\b|luong|ngan sach|budget/.test(
-    folded,
-  )
+  const folded = message.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return /chi tieu|\btieu\b|spending|expense|income|\btien\b|luong|ngan sach|budget/.test(folded)
 }
