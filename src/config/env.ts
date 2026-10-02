@@ -14,6 +14,8 @@ const schema = z.object({
   GEMINI_MODELS: z.string().optional(),
 
   SERVICE_TOKEN: z.string().optional(),
+  /** Browser origins allowed to call, comma separated. Absent, none. */
+  CORS_ORIGINS: z.string().optional(),
 
   // Where a crash is announced. Absent, nothing is sent and the error still
   // reaches the console, which is where it always went.

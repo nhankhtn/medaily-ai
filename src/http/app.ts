@@ -1,7 +1,8 @@
 import { Hono } from "hono"
-import { cors } from "hono/cors"
+import { env } from "../config/env.js"
 import { currentRequestId, log } from "../lib/log.js"
 import { environmentName, errorParts, reportError } from "../services/alerts.js"
+import { corsPolicy, parseOrigins } from "./middleware/cors.js"
 import { rateLimit } from "./middleware/rate-limit.js"
 import { requestId } from "./middleware/request-id.js"
 import { capture } from "./routes/capture.js"
@@ -21,7 +22,7 @@ export const app = new Hono()
 
 // First, so everything after it — cors, the routes, the error hook — has an id.
 app.use("*", requestId)
-app.use("*", cors())
+app.use("*", corsPolicy(parseOrigins(env.CORS_ORIGINS)))
 
 /*
  * `/health` stays at the root: it is the endpoint you reach for before
