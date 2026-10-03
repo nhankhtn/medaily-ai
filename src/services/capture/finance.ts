@@ -11,11 +11,14 @@ import type { ISODate } from "../../lib/dates.js"
  */
 export type CategoryOption = { name: string; kind: string; note?: string }
 
+export type AccountOption = { name: string }
+
 export type ParsedTransaction = {
   occurred_on?: string
   amount?: number
   kind?: string
   category?: string
+  account?: string
   merchant?: string
   note?: string
 }
@@ -38,6 +41,8 @@ Kind: "expense" for money going out, "income" for money coming in (salary, refun
 
 Category: choose one name, copied exactly, from the list of the user's categories below. Some names include a short note after an em dash (—) that explains what belongs there — use that note to disambiguate, but still return only the category name itself, never the note, and never a name that is not on the list. Use "" when none of them fits.
 
+Account: choose one name, copied exactly, from the list of the user's accounts below, when the note says which wallet or account the money left or entered. Use "" when it does not say. Never invent an account that is not on the list.
+
 Merchant: the shop, place or short label the text names ("phở Thìn", "Highlands", "ăn sáng"). Keep it under 60 characters and in the language the user wrote it. Use "" if there is nothing to name.
 
 Note: only a detail the merchant field does not already carry. Usually "".`
@@ -55,10 +60,11 @@ const SCHEMA: JsonSchema = {
           amount: { type: 'number', description: 'Positive, in whole major currency units' },
           kind: { type: 'string', enum: ['expense', 'income'] },
           category: { type: 'string', description: 'Exactly one of the listed names, or ""' },
+          account: { type: 'string', description: 'Exactly one of the listed account names, or ""' },
           merchant: { type: 'string' },
           note: { type: 'string' },
         },
-        required: ['occurred_on', 'amount', 'kind', 'category', 'merchant', 'note'],
+        required: ['occurred_on', 'amount', 'kind', 'category', 'account', 'merchant', 'note'],
       },
     },
   },
@@ -75,6 +81,7 @@ export async function parseTransactions(input: {
   today: ISODate
   currency: string
   categories: CategoryOption[]
+  accounts?: AccountOption[]
   maxItems?: number
 }): Promise<{ transactions: ParsedTransaction[]; model: string }> {
   const names = (kind: string) =>
@@ -101,6 +108,7 @@ export async function parseTransactions(input: {
       `Currency: ${input.currency}`,
       `Expense categories: ${names("expense")}`,
       `Income categories: ${names("income")}`,
+      `Accounts: ${input.accounts?.map((account) => account.name).join(" | ") || "(none)"}`,
       "",
       "Note:",
       input.text,

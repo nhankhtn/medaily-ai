@@ -17,7 +17,7 @@ import { requireToken } from "../middleware/auth.js"
  *
  * Nothing is read from the database and nothing is written to it. What the
  * prompt needs about the person, the caller sends: the note, the date it was
- * written on, their currency and their own category names. What comes back is
+ * written on, their currency, and their own category and account names. What comes back is
  * checked again by the caller, whose form has to render it.
  */
 const financeSchema = z.object({
@@ -34,6 +34,10 @@ const financeSchema = z.object({
       }),
     )
     .max(200)
+    .default([]),
+  accounts: z
+    .array(z.object({ name: z.string().max(120) }))
+    .max(100)
     .default([]),
   /** The caller's form decides how many rows it can show. */
   maxItems: z.number().int().min(1).max(100).optional(),
