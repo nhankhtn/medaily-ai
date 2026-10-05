@@ -7,6 +7,7 @@ import { rateLimit } from "./middleware/rate-limit.js"
 import { requestId } from "./middleware/request-id.js"
 import { capture } from "./routes/capture.js"
 import { chat } from "./routes/chat.js"
+import { cut } from "./routes/cut.js"
 import { health } from "./routes/health.js"
 import { models } from "./routes/models.js"
 import { report } from "./routes/report.js"
@@ -47,6 +48,7 @@ const api = new Hono()
 api.use("*", rateLimit)
 api.route("/capture", capture)
 api.route("/chat", chat)
+api.route("/cut", cut)
 api.route("/models", models)
 api.route("/report", report)
 api.route("/review", review)

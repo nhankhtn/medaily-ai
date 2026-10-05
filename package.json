@@ -26,8 +26,10 @@
     "@langchain/langgraph": "^1.4.15",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.5",
     "hono": "^4.13.8",
+    "onnxruntime-node": "^1.30.0",
     "pg": "^8.13.1",
     "postgres": "^3.4.9",
+    "sharp": "^0.35.5",
     "zod": "^4.5.4"
   },
   "devDependencies": {
@@ -45,7 +47,9 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "onnxruntime-node",
+      "sharp"
     ]
   }
 }
