@@ -1,10 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks"
+import { styleText } from "node:util"
 import { env } from "../config/env.js"
 
 /**
  * Logging that always says which request it came from.
  *
- * `[gemini] [req 3f9a1c07] key #2 is out of quota on gemini-3.5-flash-lite`
+ * `[ai] 19096  - 10/6/2026, 5:42:00 AM   ERROR [gemini] [req 3f9a1c07] key #2 is out of quota`
  *
  * The id is the same one the response header carries, the same one the
  * frontend's console printed for the request that caused this, and the same one
@@ -27,6 +28,27 @@ const WRITE: Record<Writable, (message: string, ...details: unknown[]) => void> 
   info: (message, ...details) => console.info(message, ...details),
   warn: (message, ...details) => console.warn(message, ...details),
   error: (message, ...details) => console.error(message, ...details),
+}
+
+/**
+ * The same palette Nest prints: the level and the process mark take the
+ * level's colour, the clock and the scope stay yellow. `info` is spelled
+ * `LOG` because that is the word on a Nest line.
+ *
+ * `styleText` leaves the text alone when the console is not a terminal, so a
+ * log drain still gets a plain line it can search.
+ */
+const LABEL: Record<Writable, string> = { debug: "DEBUG", info: "LOG", warn: "WARN", error: "ERROR" }
+
+const COLOR: Record<Writable, Parameters<typeof styleText>[0]> = {
+  debug: "magentaBright",
+  info: "green",
+  warn: "yellow",
+  error: "red",
+}
+
+function paint(color: Parameters<typeof styleText>[0], text: string): string {
+  return styleText(color, text)
 }
 
 const store = new AsyncLocalStorage<{ requestId: string }>()
@@ -56,8 +78,12 @@ function write(level: Writable, scope: string, message: string, details: unknown
   if (!enabled(level)) return
 
   const id = currentRequestId()
-  const prefix = id ? `[${scope}] [req ${id}]` : `[${scope}]`
-  WRITE[level](`${prefix} ${message}`, ...details)
+  const body = id ? `[req ${id}] ${message}` : message
+  const pid = paint(COLOR[level], `[ai] ${process.pid}  - `)
+  const time = paint("yellow", new Date().toLocaleString())
+  const label = paint(COLOR[level], LABEL[level].padStart(7))
+  const context = paint("yellow", `[${scope}]`)
+  WRITE[level](`${pid}${time} ${label} ${context} ${body}`, ...details)
 }
 
 /**
