@@ -132,12 +132,16 @@ export async function cutSubject(bytes: Buffer): Promise<Uint8Array> {
   if (!raw || raw.length !== SIZE * SIZE) throw new Error("unexpected mask")
   const pred = raw instanceof Float32Array ? raw : Float32Array.from(raw as ArrayLike<number>)
 
-  const mask = await sharp(stretchMask(pred), {
+  // Resize promotes a grey mask to RGB. Without greyscale the buffer is
+  // three bytes per pixel, and the alpha copy below would read the backdrop.
+  const mask = await sharp(Buffer.from(stretchMask(pred)), {
     raw: { width: SIZE, height: SIZE, channels: 1 },
   })
     .resize(width, height, { fit: "fill", kernel: "lanczos3" })
+    .greyscale()
     .raw()
     .toBuffer()
+  if (mask.length !== width * height) throw new Error("mask size")
 
   const rgba = await source.clone().ensureAlpha().raw().toBuffer()
   for (let i = 0; i < width * height; i += 1) rgba[i * 4 + 3] = mask[i] ?? 0
