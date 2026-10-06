@@ -109,6 +109,9 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
   if (
     decision.filing === "none" &&
     decision.intent !== "finance" &&
+    // "làm sao để ghi khoản chi" is help. The money words are the subject of
+    // the instructions, and flipping it here throws the guide away.
+    decision.intent !== "help" &&
     looksLikeFinance(state.input)
   ) {
     decision.intent = "finance"
@@ -117,8 +120,20 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
   return { decision, models: [`route:${model}`] }
 }
 
-/** Chi tiêu / tiền / spending — the subject is money, not the daily log. */
-function looksLikeFinance(message: string): boolean {
-  const folded = message.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "")
+/**
+ * Chi tiêu / tiền / spending — the subject is money, not the daily log.
+ *
+ * Accents are gone by the time the words are tested, and that collision is
+ * the whole bug: "mục tiêu" and "tiến độ" become the same letters as "tiêu"
+ * and "tiền". A question about a goal was answered with the rent.
+ */
+export function looksLikeFinance(message: string): boolean {
+  const folded = message
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\bmuc tieu\b/g, " ")
+    .replace(/\btien do\b/g, " ")
   return /chi tieu|\btieu\b|spending|expense|income|\btien\b|luong|ngan sach|budget/.test(folded)
 }
