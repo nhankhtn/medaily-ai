@@ -118,7 +118,7 @@ export const GUIDE: readonly HelpTopic[] = [
     key: "projects",
     page: "Projects / Dự án",
     at: "/projects",
-    body: `A project is tasks and hours behind a goal. Tasks are added by typing one and pressing Enter, and carry a status, a priority, a due date and an estimate; a task can hold sub-tasks, one level deep. A task with a due date also appears on the Calendar's day view for that day. Time spent is never typed: it is summed from the focus sessions filed to the project, so it cannot drift from reality. A project can be attached to a goal.`,
+    body: `A project is tasks and hours behind a goal. Tasks are added by typing one and pressing Enter, and carry a status, a priority, a due date and an estimate; a task can hold sub-tasks, one level deep. Many tasks at once come from Import JSON on that project's page, and the same page downloads a JSON template in the shape it reads: a list of objects with a title and an optional due date, priority, status and estimate, at most 200. A task with a due date also appears on the Calendar's day view for that day. Time spent is never typed: it is summed from the focus sessions filed to the project, so it cannot drift from reality. A project can be attached to a goal.`,
     use: `The way to fill a project's hours is to name the project on the timer before starting a run — there is no field to type them into, by design. Someone wondering why a project shows zero hours after a week of work on it has been timing runs without naming the project, or not using the timer at all.`,
   },
   {
