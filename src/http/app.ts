@@ -8,6 +8,7 @@ import { requestId } from "./middleware/request-id.js"
 import { capture } from "./routes/capture.js"
 import { chat } from "./routes/chat.js"
 import { cut } from "./routes/cut.js"
+import { extension } from "./routes/extension.js"
 import { health } from "./routes/health.js"
 import { models } from "./routes/models.js"
 import { report } from "./routes/report.js"
@@ -49,6 +50,7 @@ api.use("*", rateLimit)
 api.route("/capture", capture)
 api.route("/chat", chat)
 api.route("/cut", cut)
+api.route("/extension", extension)
 api.route("/models", models)
 api.route("/report", report)
 api.route("/review", review)

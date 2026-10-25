@@ -4,6 +4,7 @@ import { spendByCategory, spendByDay } from "../../../repositories/finance.js"
 import { listGoals } from "../../../repositories/goals.js"
 import { listTasks } from "../../../repositories/tasks.js"
 import { GUIDE } from "../guide.js"
+import { isolationFromConfig } from "../isolation.js"
 import type { AgentStateType } from "../state.js"
 
 /**
@@ -13,7 +14,10 @@ import type { AgentStateType } from "../state.js"
  *
  * Nothing here writes. The agent reads the app's tables and owns none of them.
  */
-export async function load(state: AgentStateType): Promise<Partial<AgentStateType>> {
+export async function load(
+  state: AgentStateType,
+  config?: unknown,
+): Promise<Partial<AgentStateType>> {
   const decision = state.decision
   if (!decision || decision.intent === "smalltalk") return { context: null }
 
@@ -23,6 +27,15 @@ export async function load(state: AgentStateType): Promise<Partial<AgentStateTyp
    * repository. Nothing personal is read to answer "làm sao để thêm thói quen".
    */
   if (decision.intent === "help") return { context: { guide: GUIDE } }
+
+  /*
+   * Extension / isolated clients: never touch the person's app rows, and do
+   * not inject the in-app GUIDE (that makes the model answer like the capture
+   * assistant and deny the browser page). Page ground truth lives in `input`.
+   */
+  if (isolationFromConfig(config).disableDataAccess) {
+    return { context: { isolated: true, client: "browser_extension" } }
+  }
 
   const { userId, today } = state
 

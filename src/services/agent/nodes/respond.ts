@@ -1,6 +1,7 @@
 import { getWriter, type LangGraphRunnableConfig } from "@langchain/langgraph"
 import { streamText, type Turn } from "../../gemini.js"
 import { liveTurns } from "../../../lib/session.js"
+import { isolationFromConfig } from "../isolation.js"
 import type { AgentStateType } from "../state.js"
 
 /** Shared by both prompts: the same voice answers both kinds of question. */
@@ -62,6 +63,17 @@ ${VOICE}
 - Steps in order, as a short numbered list when there is more than one. One step, one sentence.`
 
 /**
+ * Fallback when `/api/chat` is called with disableDataAccess (not the primary
+ * extension path — that is `/api/extension/chat`). Keeps in-app HELP/DATA
+ * prompts from answering browser-tab questions.
+ */
+const BROWSER_COPILOT_PROMPT = `You are Medaily Copilot, a browser-extension assistant for the web page the person has open. You are NOT the in-app Medaily capture assistant.
+
+Their message includes page URL/title/excerpt. That is ground truth. Answer from it. Never claim you cannot see the page when it is present. Do not suggest Ctrl/Cmd+K or in-app navigation unless the URL is the Medaily app itself. Do not invent personal finance/goals data.
+
+${VOICE}`
+
+/**
  * How much of the thread the model is shown. The checkpoint still holds all of
  * it — this is only what gets replayed.
  *
@@ -75,10 +87,24 @@ export async function respond(
   state: AgentStateType,
   config: LangGraphRunnableConfig,
 ): Promise<Partial<AgentStateType>> {
-  const help = state.decision?.intent === "help"
+  const isolation = isolationFromConfig(config)
+  const isolated =
+    isolation.disableDataAccess ||
+    Boolean(
+      state.context &&
+        typeof state.context === "object" &&
+        (state.context as { isolated?: boolean }).isolated === true,
+    )
+  const help = !isolated && state.decision?.intent === "help"
 
   const context = state.context
-    ? `\n\n${help ? "The app, page by page" : "Their numbers for this question"}:\n${JSON.stringify(state.context, null, 2)}`
+    ? `\n\n${
+        isolated
+          ? "Isolation flags (no personal Medaily rows)"
+          : help
+            ? "The app, page by page"
+            : "Their numbers for this question"
+      }:\n${JSON.stringify(state.context, null, 2)}`
     : ""
 
   const reason = state.decision?.reason ? `\n\n(You read this as: ${state.decision.reason})` : ""
@@ -104,9 +130,15 @@ export async function respond(
    */
   const write = getWriter(config)
 
+  const systemInstruction = isolated
+    ? BROWSER_COPILOT_PROMPT
+    : help
+      ? HELP_PROMPT
+      : DATA_PROMPT
+
   const { text, model } = await streamText(
     {
-      systemInstruction: help ? HELP_PROMPT : DATA_PROMPT,
+      systemInstruction,
       turns,
     },
     (delta) => write?.({ delta }),

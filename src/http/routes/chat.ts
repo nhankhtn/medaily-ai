@@ -18,6 +18,13 @@ const chatSchema = z.object({
   threadId: z.string().min(8).max(200).optional(),
   userId: z.uuid(),
   timezone: z.string().optional(),
+  /**
+   * Isolation for non-app clients (browser extension). Defaults off so the
+   * product assistant is unchanged. When true: never emit a filing handoff,
+   * and never read the person's finance/goals/daily tables.
+   */
+  disableFiling: z.boolean().optional(),
+  disableDataAccess: z.boolean().optional(),
 })
 
 type ChatInput = z.infer<typeof chatSchema>
@@ -28,6 +35,17 @@ function runContext(input: ChatInput) {
     userId: input.userId,
     threadId: input.threadId ?? crypto.randomUUID(),
     today: today(input.timezone),
+  }
+}
+
+/** LangGraph configurable: thread id + optional isolation flags. */
+function graphConfig(input: ChatInput, threadId: string) {
+  return {
+    configurable: {
+      thread_id: threadId,
+      disableFiling: input.disableFiling === true,
+      disableDataAccess: input.disableDataAccess === true,
+    },
   }
 }
 
@@ -46,7 +64,7 @@ export const chat = new Hono()
 
       const result = await graph().invoke(
         { input: parsed.data.message, userId: run.userId, today: run.today },
-        { configurable: { thread_id: run.threadId } },
+        graphConfig(parsed.data, run.threadId),
       )
 
       return c.json({
@@ -93,7 +111,7 @@ export const chat = new Hono()
       try {
         const updates = await graph().stream(
           { input: parsed.data.message, userId, today: anchor },
-          { configurable: { thread_id: threadId }, streamMode: ["updates", "custom"] },
+          { ...graphConfig(parsed.data, threadId), streamMode: ["updates", "custom"] },
         )
 
         let decision: Decision | undefined
@@ -153,7 +171,7 @@ export const chat = new Hono()
       try {
         const updates = await graph().stream(
           { input: parsed.data.message, userId, today: anchor },
-          { configurable: { thread_id: threadId }, streamMode: "updates" },
+          { ...graphConfig(parsed.data, threadId), streamMode: "updates" },
         )
 
         for await (const update of updates) {

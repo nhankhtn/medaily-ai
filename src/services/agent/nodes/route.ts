@@ -1,5 +1,6 @@
 import { generateJson } from "../../gemini.js"
 import { liveTurns } from "../../../lib/session.js"
+import { applyFilingIsolation, isolationFromConfig } from "../isolation.js"
 import type { AgentStateType, Decision, Filing, Intent, Period } from "../state.js"
 
 /**
@@ -61,7 +62,10 @@ const SCHEMA = {
   required: ["intent", "period", "filing", "reason"],
 }
 
-export async function route(state: AgentStateType): Promise<Partial<AgentStateType>> {
+export async function route(
+  state: AgentStateType,
+  config?: unknown,
+): Promise<Partial<AgentStateType>> {
   /*
    * The last few turns go in with the message: "còn tháng trước thì sao" is
    * only answerable against what was just asked. Two exchanges is enough to
@@ -117,7 +121,10 @@ export async function route(state: AgentStateType): Promise<Partial<AgentStateTy
     decision.intent = "finance"
   }
 
-  return { decision, models: [`route:${model}`] }
+  return {
+    decision: applyFilingIsolation(decision, isolationFromConfig(config)),
+    models: [`route:${model}`],
+  }
 }
 
 /**
