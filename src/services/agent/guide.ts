@@ -41,8 +41,8 @@ export const GUIDE: readonly HelpTopic[] = [
     key: "overview",
     page: "",
     at: "",
-    body: `medaily is a private tracker for one person. The daily log is its spine: most other pages either read from it or write back into it, so a day nobody logs is a gap everywhere. On a computer the pages are listed in the sidebar under Core, Life and Insight; on a phone the bottom bar holds Home, Finance, Daily Log and Timer, and everything else is behind More. Two things open from anywhere: quick capture (Ctrl/Cmd + J) and search (Ctrl/Cmd + K). Nothing here is required — the daily loop works on its own, and every other page is there when it earns its place.`,
-    use: `Someone starting out should use two pages for a fortnight and ignore the rest: the daily log every evening, and the timer whenever they sit down to work. That alone fills the dashboard score, the habit ticks, the charts and the review numbers, because all of those are computed from those two. Adding finance, goals or projects before there are two weeks of days in the log means setting up pages that have nothing to read yet.`,
+    body: `medaily is a private tracker for one person, with one social corner: chat rooms and the games played inside them, only with other people on this same instance. The daily log is its spine: most other pages either read from it or write back into it, so a day nobody logs is a gap everywhere. On a computer the pages are listed in the sidebar under Core, Life and Insight; on a phone the bottom bar holds Home, Finance, Daily Log and Chat, and everything else is behind More. Two things open from anywhere: quick capture (Ctrl/Cmd + J) and search (Ctrl/Cmd + K). Nothing here is required — the daily loop works on its own, and every other page is there when it earns its place.`,
+    use: `Someone starting out should use two pages for a fortnight and ignore the rest: the daily log every evening, and the timer whenever they sit down to work. That alone fills the dashboard score, the habit ticks, the charts and the review numbers, because all of those are computed from those two. Adding finance, goals or projects before there are two weeks of days in the log means setting up pages that have nothing to read yet. Chat and games can wait until there is someone else on the instance to sit with.`,
   },
   {
     key: "connections",
@@ -162,6 +162,27 @@ export const GUIDE: readonly HelpTopic[] = [
     at: "/career",
     body: `Skills with a level out of 5 and the level being aimed at, so the gap is visible; achievements with a date, the impact they had and a link; and portfolio items with their tech, a description and a link.`,
     use: `It is a slow page — filled a few times a year rather than daily. The occasion it is for is writing a CV or going into a review with something better than memory: an achievement written down on the week it happened, with its impact, is worth more than the same thing reconstructed a year later.`,
+  },
+  {
+    key: "chat",
+    page: "Chat / Nhắn tin",
+    at: "/chat",
+    body: `Talk with the other people who use this same instance — not with the assistant, and not with anyone outside it. There are two kinds of room: a direct room between two people (opening it again finds the first rather than making a second), and a named group room with as many people as are invited. Only the person who made a room can invite, rename, change its picture, remove somebody or delete it. The nav shows how many rooms have something unread. Chat needs the second database; without it the pages answer 404. Live arrival and typing need live updates configured. Inside a room the header also holds the way into games — see the games topic.`,
+    use: `Reach for it when something being tracked is arranged with somebody else — a shared habit's flame shows in a room's header, and a game is started from that same room rather than from a separate Games page. The path is: open Chat, open or start a room with the people who will play, then use the gamepad in that room's header.`,
+  },
+  {
+    key: "games",
+    page: "Games / Trò chơi",
+    at: "/chat",
+    body: `Multiplayer games live inside a chat room, not on their own page and not inside this assistant. Open a room, tap the gamepad icon in the room's header, and pick what to play. The seven on offer are: Bảy Sắc / Seven Hues (cards, 2–5), Đảo Khai Hoang / Frontier Isle (settle-and-trade island, 2–4), Lật Mặt / Unmasked (bluffing with masks, 2–6), Hết Bài (shedding cards, 2–8), Đường Đua (a short shared race, 2–10), and the two bowl games Xóc Bình and Bầu Cua (dice, 2–8, always-open tables). Opening a table or sitting down costs tokens — see Tokens — except that the beans inside a bowl game exist only for that sitting and never turn into tokens. Entertainment minutes on the daily log and timer are a different thing: they record time spent on outside entertainment, and do not start a room game. This assistant cannot sit at a table; only people in the room can.`,
+    use: `Someone asking how to play a game in the app: open Chat / Nhắn tin, open a room with at least one other person, tap the gamepad in the header, pick a game, and join or deal when seats are filled. If they have nobody else on the instance yet, say so — there is no single-player mode and no way for the assistant to take a seat. If they meant logging time spent gaming elsewhere, that is the entertainment minutes on the daily log or a timed entertainment run on the timer.`,
+  },
+  {
+    key: "tokens",
+    page: "Tokens / Token",
+    at: "/tokens",
+    body: `Tokens are the currency spent to open or sit at a room game. They are earned from ordinary use of the tracker, not bought: each habit done gives 10, every 30 minutes of focus or exercise gives 10, every 20 minutes of reading gives 5, and logging the day gives 5, up to 90 earned in a day and up to 240 held. The page shows the balance, what was earned today against the cap, and a history of what was spent on games. A fee that cannot be paid blocks the deal or the seat until more tokens are earned; a cancelled lobby refunds the fee. Bowl-game beans are unrelated and never convert here.`,
+    use: `The usual reason someone opens this page is that a game refused them for being short. Finish a habit, time a focus or exercise stretch, or log the day, then return to the room's gamepad. Someone who only wants to track entertainment time and never play with friends can ignore tokens entirely.`,
   },
   {
     key: "analytics",

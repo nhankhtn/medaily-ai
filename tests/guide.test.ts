@@ -21,10 +21,12 @@ const REAL_PAGES = new Set([
   "/projects",
   "/learning",
   "/timer",
+  "/tokens",
   "/health",
   "/finance",
   "/journal",
   "/calendar",
+  "/chat",
   "/people",
   "/career",
   "/analytics",
@@ -106,7 +108,13 @@ describe("the guide", () => {
   })
 
   it("names the four the phone bar actually holds", () => {
-    expect(topic("overview")).toContain("Home, Finance, Daily Log and Timer")
+    expect(topic("overview")).toContain("Home, Finance, Daily Log and Chat")
+  })
+
+  it("knows games live in a chat room, not as a standalone page", () => {
+    expect(topic("games")).toMatch(/gamepad/i)
+    expect(topic("games")).toMatch(/cannot sit|assistant cannot/i)
+    expect(GUIDE.find((entry) => entry.key === "games")?.at).toBe("/chat")
   })
 
   it("admits a planned block does not repeat", () => {
