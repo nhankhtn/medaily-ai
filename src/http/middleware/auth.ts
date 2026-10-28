@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto"
 import { createMiddleware } from "hono/factory"
 import { env } from "../../config/env.js"
+import { parsePublicKeys, verifyAccessToken, type AccessClaims } from "../../lib/access-token.js"
 
 /**
  * A shared secret, not a session. The frontend holds `SERVICE_TOKEN` server-side
@@ -22,6 +23,28 @@ export const requireToken = createMiddleware(async (c, next) => {
   if (!equals(presented, expected)) return c.json({ error: "unauthorized" }, 401)
   await next()
 })
+
+/** Parsed once; a malformed value fails every request loudly rather than booting quietly. */
+let publicKeys: ReturnType<typeof parsePublicKeys> | null = null
+
+/**
+ * An access token from medaily-frontend that carries `scope`, for a
+ * first-party app acting for one person. The person is on `c.get("access")`.
+ */
+export const requireAccess = (scope: string) =>
+  createMiddleware<{ Variables: { access: AccessClaims } }>(async (c, next) => {
+    publicKeys ??= parsePublicKeys(env.MEDAILY_PUBLIC_KEYS)
+    if (publicKeys.size === 0)
+      return c.json({ error: "MEDAILY_PUBLIC_KEYS is not set on the server" }, 503)
+
+    const header = c.req.header("authorization") ?? ""
+    const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : ""
+    const access = verifyAccessToken(presented, publicKeys, scope)
+    if (!access) return c.json({ error: "unauthorized" }, 401)
+
+    c.set("access", access)
+    await next()
+  })
 
 /** Constant time, and length-safe — `timingSafeEqual` throws on a mismatch. */
 function equals(a: string, b: string): boolean {

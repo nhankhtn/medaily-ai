@@ -11,6 +11,7 @@ import { cut } from "./routes/cut.js"
 import { extension } from "./routes/extension.js"
 import { health } from "./routes/health.js"
 import { models } from "./routes/models.js"
+import { reel } from "./routes/reel.js"
 import { report } from "./routes/report.js"
 import { review } from "./routes/review.js"
 import { threads } from "./routes/threads.js"
@@ -52,6 +53,7 @@ api.route("/chat", chat)
 api.route("/cut", cut)
 api.route("/extension", extension)
 api.route("/models", models)
+api.route("/reel", reel)
 api.route("/report", report)
 api.route("/review", review)
 api.route("/threads", threads)

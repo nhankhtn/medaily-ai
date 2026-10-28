@@ -14,6 +14,12 @@ const schema = z.object({
   GEMINI_MODELS: z.string().optional(),
 
   SERVICE_TOKEN: z.string().optional(),
+  /**
+   * The public half of medaily-frontend's token signing key, as a JSON array of
+   * JWKs (`pnpm token:keys` there prints it). Access tokens from first-party
+   * apps are checked against it; absent, those routes refuse everyone.
+   */
+  MEDAILY_PUBLIC_KEYS: z.string().optional(),
   /** Browser origins allowed to call, comma separated. Absent, none. */
   CORS_ORIGINS: z.string().optional(),
 
